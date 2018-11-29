@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Mandala</title>
+<style type="text/css">
+html, body {
+    overflow: hidden;
+    height: 100%;
+    margin: 0px;
+}
+canvas {
+    background: white;
+}
+#fullscreen {
+    width: 50px;
+    height: 50px;
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    background: gray;
+}
+#colorPicker {
+    position: absolute;
+    top: 0px;
+    right: 0px;
+}
+</style>
+</head>
+
+<body>
+<div id="fullscreen"></div>
+<input type="color" id="colorPicker" />
+<canvas id="scene"></canvas>
+</div>
+<script> 
+'use strict';
+
+const canvas = document.getElementById('scene');
+
+const ctx = canvas.getContext('2d');
+
+const TAU = 2 * Math.PI;
+
+let state = {
+    w: 0,
+    h: 0,
+    
+    drawers: new Map(),
+    
+    sections: 32,
+    get section() { return TAU / this.sections; },
+    
+    screenToPos(x, y) {
+        return new Vec2(
+            x - this.w / 2,
+            this.h / 2 - y 
+        );
+    }
+};
+
+class DrawPoint {
+    constructor(pos, force) {
+        this.pos = pos;
+        this.force = force;
+    }
+}
+
+class Drawer {
+    constructor(color) {
+        this.points = [];
+        this.color = color || 'rgb(0, 0, 0)';
+    }
+    
+    get lastPoint() {
+        return this.points[this.points.length - 1];
+    }
+    
+    appendMouse(ev) {
+        this.points.push(new DrawPoint(
+            state.screenToPos(ev.clientX, ev.clientY),
+            1
+        ));
+    }
+    
+    appendTouch(touch) {
+        this.points.push(new DrawPoint(
+            state.screenToPos(touch.pageX, touch.pageY),
+            touch.force
+        ));
+    }
+}
+
+function mousePos() {
+    return new Vec2(
+        state.mouse.x - state.w / 2,
+        state.h / 2 - state.mouse.y 
+    );
+}
+
+function clear() {
+    ctx.clearRect(0, 0, state.w, state.h);
+}
+
+function fillCircle(x, y, r) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.fill();
+}
+
+function paint(drawer) {
+    let p = drawer.lastPoint;
+    
+    let a = p.pos.angle();
+    let d = p.pos.length();
+    let s = Math.floor(a / state.section);
+    let r = a % state.section;
+    
+    for (let i = 0; i < state.sections; ++i) {
+        let b = state.section * i + ((i+s+1)%2 ? r : (state.section - r));
+        let x = d * Math.cos(b);
+        let y = d * Math.sin(b);
+        
+        ctx.save();
+        ctx.translate(state.w/2, state.h/2);
+        ctx.fillStyle = drawer.color;
+        fillCircle(x, y, 5 * p.force);
+        ctx.restore();
+    }
+}
+
+function draw(t) {
+    for (let drawer of state.drawers.values()) {
+        paint(drawer);
+    }
+}
+
+function setCanvasSize() {
+    let data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    
+    let oldW = canvas.width;
+    let oldH = canvas.height;
+    
+    canvas.width = state.w = document.body.clientWidth;
+    canvas.height = state.h = document.body.clientHeight;
+    
+    ctx.putImageData(data, (state.w / oldW)/2, (state.h - oldH)/2);
+}
+
+// ---
+
+const colorPicker = document.getElementById('colorPicker');
+
+function loop(t) {
+    draw(t);
+    requestAnimationFrame(loop);
+}
+
+function onLoad() {
+    setCanvasSize();
+    requestAnimationFrame(loop);
+}
+
+const MOUSE_ID = 'mouse';
+
+window.addEventListener('load', ev => {
+    onLoad();
+});
+
+window.addEventListener('resize', ev => {
+    setCanvasSize();
+});
+
+canvas.addEventListener('mousedown', ev => {
+    let drawer = new Drawer(colorPicker.value);
+    drawer.appendMouse(ev);
+    state.drawers.set(MOUSE_ID, drawer);
+});
+
+canvas.addEventListener('mousemove', ev => {
+    state.drawers.get(MOUSE_ID).appendMouse(ev);
+});
+
+canvas.addEventListener('mouseup', ev => {
+    state.drawers.delete(MOUSE_ID);
+});
+
+canvas.addEventListener('touchstart', ev => {
+    ev.preventDefault();
+    for (let touch of Array.from(ev.changedTouches)) {
+        let drawer = new Drawer(colorPicker.value);
+        drawer.appendTouch(ev);
+        state.drawers.set(touch.identifier, drawer);
+    }
+});
+
+canvas.addEventListener('touchmove', ev => {
+    for (let touch of Array.from(ev.changedTouches)) {
+        state.drawers.get(touch.identifier).appendTouch(touch);
+    }
+});
+
+canvas.addEventListener('touchend', ev => {
+    for (let touch of Array.from(ev.changedTouches)) {
+        state.drawers.delete(touch.identifier);
+    }
+});
+
+// ---
+
+const fullscreenButton = document.getElementById('fullscreen');
+
+fullscreenButton.addEventListener('click', ev => {
+    if (currentFullscreen()) {
+        exitFullscreen();
+    } else {
+        openFullscreen(document.body);
+    }
+});
+
+// ---
+
+class Vec2 {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+    
+    atan2() {
+        return Math.atan2(this.y, this.x);
+    }
+    
+    angle() {
+        let a = this.atan2();
+        return a >= 0 ? a : (TAU + a);
+    }
+    
+    lengthSq() {
+        return this.x*this.x + this.y*this.y;
+    }
+    
+    length() {
+        return Math.sqrt(this.lengthSq());
+    }
+}
+
+Vec2.X = new Vec2(1, 0);
+Vec2.Y = new Vec2(0, 1);
+
+// ---
+
+function openFullscreen(elem) {
+  if (elem.requestFullscreen) {
+    elem.requestFullscreen();
+  } else if (elem.mozRequestFullScreen) { /* Firefox */
+    elem.mozRequestFullScreen();
+  } else if (elem.webkitRequestFullscreen) { /* Chrome, Safari and Opera */
+    elem.webkitRequestFullscreen();
+  } else if (elem.msRequestFullscreen) { /* IE/Edge */
+    elem.msRequestFullscreen();
+  }
+}
+
+function exitFullscreen() {
+    if (document.exitFullscreen) {
+        document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+    } else if (document.mozCancelFullScreen) {
+        document.mozCancelFullScreen();
+    } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+    }
+}
+
+function currentFullscreen() {
+    return (
+        document.fullscreenElement
+        || document.webkitFullscreenElement
+        || document.mozFullScreenElement
+        || document.msFullScreenElement
+    );
+}
+
+</script>
+</body>
+</html>
