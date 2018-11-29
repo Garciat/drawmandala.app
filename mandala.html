@@ -117,17 +117,19 @@ function paint(drawer) {
     let s = Math.floor(a / state.section);
     let r = a % state.section;
     
+    ctx.save();
+    ctx.translate(state.w/2, state.h/2);
+    ctx.fillStyle = drawer.color;
+    
     for (let i = 0; i < state.sections; ++i) {
         let b = state.section * i + ((i+s+1)%2 ? r : (state.section - r));
         let x = d * Math.cos(b);
         let y = d * Math.sin(b);
         
-        ctx.save();
-        ctx.translate(state.w/2, state.h/2);
-        ctx.fillStyle = drawer.color;
         fillCircle(x, y, 5 * p.force);
-        ctx.restore();
     }
+    
+    ctx.restore();
 }
 
 function draw(t) {
