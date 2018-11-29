@@ -109,22 +109,16 @@ function fillCircle(x, y, r) {
     ctx.fill();
 }
 
-function paint(drawer) {
-    let p = drawer.lastPoint;
-    
-    let a = p.pos.angle();
-    let d = p.pos.length();
-    
+function paint(p, force, color) {
     ctx.save();
     ctx.translate(state.w/2, state.h/2);
-    ctx.fillStyle = drawer.color;
+    ctx.fillStyle = color;
     
     for (let i = 0; i < state.sections; ++i) {
-        let b = state.section * i - a * Math.pow(-1, i);
-        let x = d * Math.cos(b);
-        let y = d * Math.sin(b);
+        let b = state.section * i - p.angle() * Math.pow(-1, i);
+        let q = Vec2.fromRad(b).scaled(p.length());
         
-        fillCircle(x, y, 5 * p.force);
+        fillCircle(q.x, q.y, 5 * force);
     }
     
     ctx.restore();
@@ -132,7 +126,7 @@ function paint(drawer) {
 
 function draw(t) {
     for (let drawer of state.drawers.values()) {
-        paint(drawer);
+        paint(drawer.lastPoint.pos, drawer.lastPoint.force, drawer.color);
     }
 }
 
@@ -242,6 +236,14 @@ class Vec2 {
     
     length() {
         return Math.sqrt(this.lengthSq());
+    }
+    
+    scaled(k) {
+        return new Vec2(k * this.x, k * this.y);
+    }
+    
+    static fromRad(r) {
+        return new Vec2(Math.cos(r), Math.sin(r));
     }
 }
 
