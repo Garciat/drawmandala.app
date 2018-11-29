@@ -114,15 +114,13 @@ function paint(drawer) {
     
     let a = p.pos.angle();
     let d = p.pos.length();
-    let s = Math.floor(a / state.section);
-    let r = a % state.section;
     
     ctx.save();
     ctx.translate(state.w/2, state.h/2);
     ctx.fillStyle = drawer.color;
     
     for (let i = 0; i < state.sections; ++i) {
-        let b = state.section * i + ((i+s+1)%2 ? r : (state.section - r));
+        let b = state.section * i - a * Math.pow(-1, i);
         let x = d * Math.cos(b);
         let y = d * Math.sin(b);
         
