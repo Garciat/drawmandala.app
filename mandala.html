@@ -14,7 +14,6 @@ html, body {
 #scene {
     position: absolute;
     z-index: 1;
-    background: white;
 }
 #drawInput {
     position: absolute;
@@ -22,14 +21,10 @@ html, body {
     left: 0;
     z-index: 5;
 }
-#fullscreen {
-    width: 50px;
-    height: 50px;
+#menu {
     position: absolute;
-    top: 0px;
-    left: 0px;
     z-index: 10;
-    background: gray;
+    width: 5em;
 }
 #colorPicker {
     position: absolute;
@@ -42,9 +37,13 @@ html, body {
 
 <body>
     
-    <div id="fullscreen"></div>
+    <select id="menu">
+        <option value="">Menu</option>
+        <option value="toggleFullscreen">Toggle Fullscreen</option>
+        <option value="save">Save</option>
+    </select>
     <input type="color" id="colorPicker" />
-    <div id="drawInput">aasd</div>
+    <div id="drawInput"></div>
     <canvas id="scene" />
     
 <script> 
@@ -115,6 +114,10 @@ class Drawer {
 
 function clear() {
     ctx.clearRect(0, 0, state.w, state.h);
+    ctx.save();
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, state.w, state.h);
+    ctx.restore();
 }
 
 function fillCircle(x, y, r) {
@@ -161,11 +164,11 @@ function loop(t) {
 }
 
 function onLoad() {
-    setCanvasSize();
+    setCanvasSize(true);
     requestAnimationFrame(loop);
 }
 
-function setCanvasSize() {
+function setCanvasSize(isNew) {
     let data = ctx.getImageData(0, 0, canvas.width, canvas.height);
     
     let oldS = Math.max(canvas.width, canvas.height);
@@ -184,7 +187,8 @@ function setCanvasSize() {
     canvas.style.left = `${-adjX}px`;
     canvas.style.top = `${-adjY}px`;
     
-    ctx.putImageData(data, adjS, adjS);
+    clear();
+    if (!isNew) ctx.putImageData(data, adjS, adjS);
     
     // alert(JSON.stringify(state))
     
@@ -237,14 +241,28 @@ drawInput.addEventListener('touchend', ev => {
 
 // ---
 
-const fullscreenButton = document.getElementById('fullscreen');
+const menuInput = document.getElementById('menu');
 
-fullscreenButton.addEventListener('click', ev => {
-    if (currentFullscreen()) {
-        exitFullscreen();
-    } else {
-        openFullscreen(document.body);
+const menuActions = {
+    toggleFullscreen() {
+        if (currentFullscreen()) {
+            exitFullscreen();
+        } else {
+            openFullscreen(document.body);
+        }
+    },
+    
+    save() {
+        canvas.toBlob(blob => {
+            let url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+        });
     }
+};
+
+menuInput.addEventListener('change', ev => {
+    menuActions[menuInput.value]();
+    menuInput.value = '';
 });
 
 // ---
