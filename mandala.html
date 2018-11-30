@@ -59,7 +59,7 @@ html, body {
     </div>
     <div id="drawInput"></div>
     <canvas id="scene" />
-    <input type="color" id="backgroundPicker" />
+    <input type="color" id="backgroundPicker" value="#FFFFFF" />
     
 <script> 
 'use strict';
@@ -345,12 +345,22 @@ pallet.addEventListener('click', ev => {
 });
 
 window.addEventListener('load', ev => {
-    addColorHistory('rgb(248,244,238)');
-    addColorHistory('rgb(255,228,225)');
-    addColorHistory('rgb(246,84,106)');
-    addColorHistory('rgb(0,206,209)');
-    addColorHistory('rgb(26,28,114)');
+    addColorHistory(rgbToHex(248,244,238));
+    addColorHistory(rgbToHex(255,228,225));
+    addColorHistory(rgbToHex(246,84,106));
+    addColorHistory(rgbToHex(0,206,209));
+    addColorHistory(rgbToHex(26,28,114));
 });
+
+// ---
+
+function rgbToHex(r, g, b) {
+    return `#${octetHex(r)}${octetHex(g)}${octetHex(b)}`;
+}
+
+function octetHex(x) {
+    return x.toString(16).padStart(2, '0');
+}
 
 // ---
 
