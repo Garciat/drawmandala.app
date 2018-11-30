@@ -358,6 +358,7 @@ filePicker.addEventListener('change', async function (ev) {
     let url = await readFileAsDataURLAsync(file);
     let img = await loadImageAsync(url);
     
+    pushSnapshot();
     initialize(img);
 });
 
