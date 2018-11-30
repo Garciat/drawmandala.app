@@ -7,11 +7,20 @@
 <style type="text/css">
 html, body {
     overflow: hidden;
+    width: 100%;
     height: 100%;
     margin: 0px;
 }
-canvas {
+#scene {
+    position: absolute;
+    z-index: 1;
     background: white;
+}
+#drawInput {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 5;
 }
 #fullscreen {
     width: 50px;
@@ -19,21 +28,25 @@ canvas {
     position: absolute;
     top: 0px;
     left: 0px;
+    z-index: 10;
     background: gray;
 }
 #colorPicker {
     position: absolute;
     top: 0px;
     right: 0px;
+    z-index: 10;
 }
 </style>
 </head>
 
 <body>
-<div id="fullscreen"></div>
-<input type="color" id="colorPicker" />
-<canvas id="scene"></canvas>
-</div>
+    
+    <div id="fullscreen"></div>
+    <input type="color" id="colorPicker" />
+    <div id="drawInput">aasd</div>
+    <canvas id="scene" />
+    
 <script> 
 'use strict';
 
@@ -46,16 +59,24 @@ const TAU = 2 * Math.PI;
 let state = {
     w: 0,
     h: 0,
+    dx: 0,
+    dy: 0,
     
     drawers: new Map(),
+    
+    strokeMin: 0,
+    strokeMax: 3,
+    strokeWith(x) {
+        return this.strokeMin + x * (this.strokeMax - this.strokeMin);
+    },
     
     sections: 32,
     get section() { return TAU / this.sections; },
     
     screenToPos(x, y) {
         return new Vec2(
-            x - this.w / 2,
-            this.h / 2 - y 
+            x - this.w / 2 + state.dx,
+            this.h / 2 - y - state.dy
         );
     }
 };
@@ -92,13 +113,6 @@ class Drawer {
     }
 }
 
-function mousePos() {
-    return new Vec2(
-        state.mouse.x - state.w / 2,
-        state.h / 2 - state.mouse.y 
-    );
-}
-
 function clear() {
     ctx.clearRect(0, 0, state.w, state.h);
 }
@@ -117,7 +131,7 @@ function paint(p, force, color) {
         let b = state.section * i - p.angle() * Math.pow(-1, i);
         let q = Vec2.fromRad(b).scaled(p.length());
         
-        fillCircle(q.x, q.y, 5 * force);
+        fillCircle(q.x, q.y, state.strokeWith(force));
     }
     
     ctx.restore();
@@ -134,21 +148,12 @@ function draw(t) {
     ctx.restore();
 }
 
-function setCanvasSize() {
-    let data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    
-    let oldW = canvas.width;
-    let oldH = canvas.height;
-    
-    canvas.width = state.w = document.body.clientWidth;
-    canvas.height = state.h = document.body.clientHeight;
-    
-    ctx.putImageData(data, (state.w / oldW)/2, (state.h - oldH)/2);
-}
-
 // ---
 
+const MOUSE_ID = 'mouse';
+
 const colorPicker = document.getElementById('colorPicker');
+const drawInput = document.getElementById('drawInput');
 
 function loop(t) {
     draw(t);
@@ -160,7 +165,32 @@ function onLoad() {
     requestAnimationFrame(loop);
 }
 
-const MOUSE_ID = 'mouse';
+function setCanvasSize() {
+    let data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    
+    let oldS = Math.max(canvas.width, canvas.height);
+    let newW = window.innerWidth;
+    let newH = window.innerHeight;
+    let newS = Math.max(oldS, Math.max(newW, newH));
+    
+    let adjX = (newS - newW) / 2;
+    let adjY = (newS - newH) / 2;
+    let adjS = (newS - oldS) / 2;
+    
+    canvas.width = state.w = newS;
+    canvas.height = state.h = newS;
+    state.dx = adjX;
+    state.dy = adjY;
+    canvas.style.left = `${-adjX}px`;
+    canvas.style.top = `${-adjY}px`;
+    
+    ctx.putImageData(data, adjS, adjS);
+    
+    // alert(JSON.stringify(state))
+    
+    drawInput.style.width = `${newW}px`;
+    drawInput.style.height = `${newH}px`;
+}
 
 window.addEventListener('load', ev => {
     onLoad();
@@ -170,21 +200,21 @@ window.addEventListener('resize', ev => {
     setCanvasSize();
 });
 
-canvas.addEventListener('mousedown', ev => {
+drawInput.addEventListener('mousedown', ev => {
     let drawer = new Drawer(colorPicker.value);
     drawer.appendMouse(ev);
     state.drawers.set(MOUSE_ID, drawer);
 });
 
-canvas.addEventListener('mousemove', ev => {
+drawInput.addEventListener('mousemove', ev => {
     state.drawers.get(MOUSE_ID).appendMouse(ev);
 });
 
-canvas.addEventListener('mouseup', ev => {
+drawInput.addEventListener('mouseup', ev => {
     state.drawers.delete(MOUSE_ID);
 });
 
-canvas.addEventListener('touchstart', ev => {
+drawInput.addEventListener('touchstart', ev => {
     ev.preventDefault();
     for (let touch of Array.from(ev.changedTouches)) {
         let drawer = new Drawer(colorPicker.value);
@@ -193,13 +223,13 @@ canvas.addEventListener('touchstart', ev => {
     }
 });
 
-canvas.addEventListener('touchmove', ev => {
+drawInput.addEventListener('touchmove', ev => {
     for (let touch of Array.from(ev.changedTouches)) {
         state.drawers.get(touch.identifier).appendTouch(touch);
     }
 });
 
-canvas.addEventListener('touchend', ev => {
+drawInput.addEventListener('touchend', ev => {
     for (let touch of Array.from(ev.changedTouches)) {
         state.drawers.delete(touch.identifier);
     }
@@ -257,15 +287,15 @@ Vec2.Y = new Vec2(0, 1);
 // ---
 
 function openFullscreen(elem) {
-  if (elem.requestFullscreen) {
-    elem.requestFullscreen();
-  } else if (elem.mozRequestFullScreen) { /* Firefox */
-    elem.mozRequestFullScreen();
-  } else if (elem.webkitRequestFullscreen) { /* Chrome, Safari and Opera */
-    elem.webkitRequestFullscreen();
-  } else if (elem.msRequestFullscreen) { /* IE/Edge */
-    elem.msRequestFullscreen();
-  }
+    if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+    } else if (elem.mozRequestFullScreen) {
+        elem.mozRequestFullScreen();
+    } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+    } else if (elem.msRequestFullscreen) {
+        elem.msRequestFullscreen();
+    }
 }
 
 function exitFullscreen() {
