@@ -52,6 +52,7 @@ html, body {
         <option value="">Menu</option>
         <option value="toggleFullscreen">Toggle Fullscreen</option>
         <option value="save">Save</option>
+        <option value="load">Load</option>
         <option value="fill">Fill</option>
     </select>
     <div id="pallet">
@@ -60,6 +61,7 @@ html, body {
     <div id="drawInput"></div>
     <canvas id="scene" />
     <input type="color" id="backgroundPicker" value="#FFFFFF" />
+    <input type="file" id="filePicker" />
     
 <script> 
 'use strict';
@@ -148,6 +150,18 @@ function fillCanvas(color) {
     ctx.restore();
 }
 
+function cloneCanvas() {
+    var newCanvas = document.createElement('canvas');
+    var context = newCanvas.getContext('2d');
+
+    newCanvas.width = canvas.width;
+    newCanvas.height = canvas.height;
+
+    context.drawImage(canvas, 0, 0);
+
+    return newCanvas;
+}
+
 function paint(p, force, color) {
     ctx.save();
     ctx.fillStyle = color;
@@ -186,14 +200,24 @@ function loop(t) {
 }
 
 function onLoad() {
-    setCanvasSize(true);
+    initialize(null);
     requestAnimationFrame(loop);
 }
 
-function setCanvasSize(isNew) {
+function setCanvasSize() {
+    initialize(cloneCanvas());
+}
+
+function initialize(source) {
     let data = ctx.getImageData(0, 0, canvas.width, canvas.height);
     
-    let oldS = Math.max(canvas.width, canvas.height);
+    let oldS;
+    if (source) {
+        oldS = Math.max(source.width, source.height);
+    } else {
+        oldS = 0;
+    }
+    
     let newW = window.innerWidth;
     let newH = window.innerHeight;
     let newS = Math.max(oldS, Math.max(newW, newH));
@@ -210,7 +234,9 @@ function setCanvasSize(isNew) {
     canvas.style.top = `${-adjY}px`;
     
     clear();
-    if (!isNew) ctx.putImageData(data, adjS, adjS);
+    if (source) {
+        ctx.drawImage(source, adjS, adjS);
+    }
     
     // alert(JSON.stringify(state))
     
@@ -265,6 +291,7 @@ drawInput.addEventListener('touchend', ev => {
 
 const menuInput = document.getElementById('menu');
 const backgroundPicker = document.getElementById('backgroundPicker');
+const filePicker = document.getElementById('filePicker');
 
 const menuActions = {
     toggleFullscreen() {
@@ -282,6 +309,10 @@ const menuActions = {
         });
     },
     
+    load() {
+        filePicker.click();
+    },
+    
     fill() {
         backgroundPicker.click();
     }
@@ -296,6 +327,37 @@ backgroundPicker.addEventListener('change', ev => {
     state.background = backgroundPicker.value;
     clear();
 });
+
+filePicker.addEventListener('change', async function (ev) {
+    let files = ev.target.files;
+    let file = files[0];
+    
+    if (!file.type.match('image.*')) {
+        alert('Only image files, please.');
+        return;
+    }
+    
+    let url = await readFileAsDataURLAsync(file);
+    let img = await loadImageAsync(url);
+    
+    initialize(img);
+});
+
+function readFileAsDataURLAsync(file) {
+    return new Promise((resolve, reject) => {
+        let reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+    });
+}
+
+function loadImageAsync(url) {
+    return new Promise((resolve, reject) => {
+        let img = new Image();
+        img.onload = () => resolve(img);
+        img.src = url;
+    });
+}
 
 // ---
 
