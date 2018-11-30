@@ -195,6 +195,7 @@ function draw(t) {
 
 const MOUSE_ID = 'mouse';
 const MAX_SNAPSHOT_HISTORY = 5;
+const STORAGE_KEY_SCENE = 'scene';
 
 const colorPicker = document.getElementById('colorPicker');
 const drawInput = document.getElementById('drawInput');
@@ -204,8 +205,8 @@ function loop(t) {
     requestAnimationFrame(loop);
 }
 
-function onLoad() {
-    initialize(null);
+async function onLoad() {
+    initialize(await restoreState());
     requestAnimationFrame(loop);
 }
 
@@ -253,6 +254,18 @@ function pushSnapshot() {
 function popSnapshot() {
     let snapshot = state.snapshots.pop();
     if (snapshot) initialize(snapshot);
+    saveState();
+}
+
+function saveState() {
+    let url = cloneCanvas().toDataURL();
+    window.localStorage.setItem(STORAGE_KEY_SCENE, url);
+}
+
+async function restoreState() {
+    let url = window.localStorage.getItem(STORAGE_KEY_SCENE);
+    if (!url) return null;
+    return await loadImageAsync(url);
 }
 
 window.addEventListener('load', ev => {
@@ -276,6 +289,7 @@ drawInput.addEventListener('mousemove', ev => {
 
 drawInput.addEventListener('mouseup', ev => {
     state.drawers.delete(MOUSE_ID);
+    saveState();
 });
 
 drawInput.addEventListener('touchstart', ev => {
@@ -298,6 +312,7 @@ drawInput.addEventListener('touchend', ev => {
     for (let touch of Array.from(ev.changedTouches)) {
         state.drawers.delete(touch.identifier);
     }
+    saveState();
 });
 
 // ---
@@ -327,6 +342,7 @@ const menuActions = {
     },
     
     fill() {
+        backgroundPicker.value = '#000001';
         backgroundPicker.click();
     },
     
@@ -356,6 +372,7 @@ menuInput.addEventListener('change', ev => {
 backgroundPicker.addEventListener('change', ev => {
     state.background = backgroundPicker.value;
     clear();
+    saveState();
 });
 
 filePicker.addEventListener('change', async function (ev) {
@@ -374,6 +391,7 @@ filePicker.addEventListener('change', async function (ev) {
     
     pushSnapshot();
     initialize(img);
+    saveState();
 });
 
 function readFileAsDataURLAsync(file) {
