@@ -26,12 +26,23 @@ html, body {
     z-index: 10;
     width: 5em;
 }
-#colorPicker {
+#pallet {
     position: absolute;
     top: 0px;
     right: 0px;
     z-index: 10;
+    width: 30px;
+    border: 1px solid black;
+    border-width: 0 0 1px 1px;
 }
+    #colorPicker {
+        display: block;
+        box-sizing: border-box;
+        width: 100%;
+    }
+    #pallet .memory {
+        height: 20px;
+    }
 </style>
 </head>
 
@@ -41,10 +52,14 @@ html, body {
         <option value="">Menu</option>
         <option value="toggleFullscreen">Toggle Fullscreen</option>
         <option value="save">Save</option>
+        <option value="fill">Fill</option>
     </select>
-    <input type="color" id="colorPicker" />
+    <div id="pallet">
+        <input type="color" id="colorPicker" />
+    </div>
     <div id="drawInput"></div>
     <canvas id="scene" />
+    <input type="color" id="backgroundPicker" />
     
 <script> 
 'use strict';
@@ -68,6 +83,9 @@ let state = {
     strokeWith(x) {
         return this.strokeMin + x * (this.strokeMax - this.strokeMin);
     },
+    color: 'rgb(0, 0, 0)',
+    colorHistory: [],
+    background: 'rgb(255, 255, 255)',
     
     sections: 32,
     get section() { return TAU / this.sections; },
@@ -114,16 +132,20 @@ class Drawer {
 
 function clear() {
     ctx.clearRect(0, 0, state.w, state.h);
-    ctx.save();
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, state.w, state.h);
-    ctx.restore();
+    fillCanvas(state.background);
 }
 
 function fillCircle(x, y, r) {
     ctx.beginPath();
     ctx.arc(x, y, r, 0, TAU);
     ctx.fill();
+}
+
+function fillCanvas(color) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, state.w, state.h);
+    ctx.restore();
 }
 
 function paint(p, force, color) {
@@ -242,6 +264,7 @@ drawInput.addEventListener('touchend', ev => {
 // ---
 
 const menuInput = document.getElementById('menu');
+const backgroundPicker = document.getElementById('backgroundPicker');
 
 const menuActions = {
     toggleFullscreen() {
@@ -257,12 +280,76 @@ const menuActions = {
             let url = URL.createObjectURL(blob);
             window.open(url, '_blank');
         });
+    },
+    
+    fill() {
+        backgroundPicker.click();
     }
 };
 
 menuInput.addEventListener('change', ev => {
     menuActions[menuInput.value]();
     menuInput.value = '';
+});
+
+backgroundPicker.addEventListener('change', ev => {
+    state.background = backgroundPicker.value;
+    clear();
+});
+
+// ---
+
+const MAX_COLOR_HISTORY = 10;
+const pallet = document.getElementById('pallet');
+
+function setColor(value) {
+    addColorHistory(state.color);
+    colorPicker.value = value;
+    state.color = value;
+}
+
+function addColorHistory(value) {
+    if (isInColorHistory(value)) return;
+    
+    state.colorHistory.unshift(value);
+    state.colorHistory = state.colorHistory.slice(0, MAX_COLOR_HISTORY);
+    renderColorHistory();
+}
+
+function isInColorHistory(value) {
+    return state.colorHistory.indexOf(value) >= 0;
+}
+
+function renderColorHistory() {
+    for (let memory of document.querySelectorAll('#pallet .memory')) {
+        memory.parentNode.removeChild(memory);
+    }
+    
+    for (let value of state.colorHistory) {
+        let memory = document.createElement('div');
+        memory.dataset.value = value;
+        memory.classList.add('memory');
+        memory.style.background = value;
+        pallet.appendChild(memory);
+    }
+}
+
+colorPicker.addEventListener('change', ev => {
+    setColor(colorPicker.value);
+});
+
+pallet.addEventListener('click', ev => {
+    if (ev.target.classList.contains('memory')) {
+        setColor(ev.target.dataset.value);
+    }
+});
+
+window.addEventListener('load', ev => {
+    addColorHistory('rgb(248,244,238)');
+    addColorHistory('rgb(255,228,225)');
+    addColorHistory('rgb(246,84,106)');
+    addColorHistory('rgb(0,206,209)');
+    addColorHistory('rgb(26,28,114)');
 });
 
 // ---
