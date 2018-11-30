@@ -209,8 +209,6 @@ function setCanvasSize() {
 }
 
 function initialize(source) {
-    let data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    
     let oldS;
     if (source) {
         oldS = Math.max(source.width, source.height);
@@ -237,8 +235,6 @@ function initialize(source) {
     if (source) {
         ctx.drawImage(source, adjS, adjS);
     }
-    
-    // alert(JSON.stringify(state))
     
     drawInput.style.width = `${newW}px`;
     drawInput.style.height = `${newH}px`;
@@ -336,6 +332,8 @@ filePicker.addEventListener('change', async function (ev) {
         alert('Only image files, please.');
         return;
     }
+    
+    filePicker.value = null;
     
     let url = await readFileAsDataURLAsync(file);
     let img = await loadImageAsync(url);
