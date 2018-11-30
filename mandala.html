@@ -54,6 +54,7 @@ html, body {
         <option value="save">Save</option>
         <option value="load">Load</option>
         <option value="fill">Fill</option>
+        <option value="mirroring">Mirroring</option>
         <option value="toggleFullscreen">Toggle Fullscreen</option>
     </select>
     <div id="pallet">
@@ -331,6 +332,19 @@ const menuActions = {
     
     undo() {
         popSnapshot();
+    },
+    
+    mirroring() {
+        let input = window.prompt('Pick mirroring (even number)', state.sections);
+        
+        let value = parseInt(input, 10);
+        
+        if (isNaN(value) || value <= 0 || value % 2 != 0) {
+            alert('Try again with an even number.')
+            return;
+        }
+        
+        state.sections = value;
     }
 };
 
