@@ -50,10 +50,11 @@ html, body {
     
     <select id="menu">
         <option value="">Menu</option>
-        <option value="toggleFullscreen">Toggle Fullscreen</option>
+        <option value="undo">Undo</option>
         <option value="save">Save</option>
         <option value="load">Load</option>
         <option value="fill">Fill</option>
+        <option value="toggleFullscreen">Toggle Fullscreen</option>
     </select>
     <div id="pallet">
         <input type="color" id="colorPicker" />
@@ -89,6 +90,8 @@ let state = {
     colorHistory: [],
     background: 'rgb(255, 255, 255)',
     
+    snapshots: [],
+    
     sections: 32,
     get section() { return TAU / this.sections; },
     
@@ -114,7 +117,7 @@ class Drawer {
     }
     
     get lastPoint() {
-        return this.points[this.points.length - 1];
+        return lastElement(this.points);
     }
     
     appendMouse(ev) {
@@ -190,6 +193,7 @@ function draw(t) {
 // ---
 
 const MOUSE_ID = 'mouse';
+const MAX_SNAPSHOT_HISTORY = 5;
 
 const colorPicker = document.getElementById('colorPicker');
 const drawInput = document.getElementById('drawInput');
@@ -240,6 +244,16 @@ function initialize(source) {
     drawInput.style.height = `${newH}px`;
 }
 
+function pushSnapshot() {
+    let snapshot = cloneCanvas();
+    pushCircular(state.snapshots, snapshot, MAX_SNAPSHOT_HISTORY);
+}
+
+function popSnapshot() {
+    let snapshot = state.snapshots.pop();
+    if (snapshot) initialize(snapshot);
+}
+
 window.addEventListener('load', ev => {
     onLoad();
 });
@@ -249,6 +263,7 @@ window.addEventListener('resize', ev => {
 });
 
 drawInput.addEventListener('mousedown', ev => {
+    pushSnapshot();
     let drawer = new Drawer(colorPicker.value);
     drawer.appendMouse(ev);
     state.drawers.set(MOUSE_ID, drawer);
@@ -264,6 +279,7 @@ drawInput.addEventListener('mouseup', ev => {
 
 drawInput.addEventListener('touchstart', ev => {
     ev.preventDefault();
+    pushSnapshot();
     for (let touch of Array.from(ev.changedTouches)) {
         let drawer = new Drawer(colorPicker.value);
         drawer.appendTouch(ev);
@@ -311,6 +327,10 @@ const menuActions = {
     
     fill() {
         backgroundPicker.click();
+    },
+    
+    undo() {
+        popSnapshot();
     }
 };
 
@@ -371,8 +391,8 @@ function setColor(value) {
 function addColorHistory(value) {
     if (isInColorHistory(value)) return;
     
-    state.colorHistory.unshift(value);
-    state.colorHistory = state.colorHistory.slice(0, MAX_COLOR_HISTORY);
+    unshiftCircular(state.colorHistory, value, MAX_COLOR_HISTORY);
+    
     renderColorHistory();
 }
 
@@ -492,6 +512,20 @@ function currentFullscreen() {
         || document.mozFullScreenElement
         || document.msFullScreenElement
     );
+}
+
+function lastElement(xs) {
+    return xs[xs.length - 1];
+}
+
+function pushCircular(xs, x, max) {
+    xs.push(x);
+    while (xs.length > max) xs.shift();
+}
+
+function unshiftCircular(xs, x, max) {
+    xs.unshift(x);
+    while (xs.length > max) xs.pop();
 }
 
 </script>
