@@ -169,17 +169,12 @@ function cloneCanvas() {
 }
 
 function paint(p, force, color) {
-    ctx.save();
-    ctx.fillStyle = color;
-    
     for (let i = 0; i < state.sections; ++i) {
         let b = state.section * i - p.angle() * Math.pow(-1, i);
         let q = Vec2.fromRad(b).scaled(p.length());
         
         fillCircle(q.x, q.y, state.strokeWith(force));
     }
-    
-    ctx.restore();
 }
 
 function draw(t) {
@@ -187,6 +182,7 @@ function draw(t) {
     ctx.translate(state.w/2, state.h/2);
     
     for (let drawer of state.drawers.values()) {
+        ctx.fillStyle = color;
         for (let point of drawer.popPoints()) {
             paint(point.pos, point.force, drawer.color);
         }
