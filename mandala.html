@@ -117,8 +117,10 @@ class Drawer {
         this.color = color || 'rgb(0, 0, 0)';
     }
     
-    get lastPoint() {
-        return lastElement(this.points);
+    popPoints() {
+        let points;
+        [points, this.points] = [this.points, []];
+        return points;
     }
     
     appendMouse(ev) {
@@ -185,7 +187,9 @@ function draw(t) {
     ctx.translate(state.w/2, state.h/2);
     
     for (let drawer of state.drawers.values()) {
-        paint(drawer.lastPoint.pos, drawer.lastPoint.force, drawer.color);
+        for (let point of drawer.popPoints()) {
+            paint(point.pos, point.force, drawer.color);
+        }
     }
     
     ctx.restore();
