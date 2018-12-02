@@ -70,13 +70,23 @@ html, body {
 <script> 
 'use strict';
 
+const TAU = 2 * Math.PI;
+
+const STORAGE_KEY_SCENE = 'scene';
+const MAX_SNAPSHOT_HISTORY = 5;
+const MAX_COLOR_HISTORY = 25;
+
+const drawInput = document.getElementById('drawInput');
 const canvas = document.getElementById('scene');
+const menuInput = document.getElementById('menu');
+const colorPicker = document.getElementById('colorPicker');
+const backgroundPicker = document.getElementById('backgroundPicker');
+const filePicker = document.getElementById('filePicker');
+const pallet = document.getElementById('pallet');
 
 const ctx = canvas.getContext('2d');
 
-const TAU = 2 * Math.PI;
-
-let state = {
+let scene = {
     w: 0,
     h: 0,
     dx: 0,
@@ -100,8 +110,8 @@ let state = {
     
     screenToPos(x, y) {
         return new Vec2(
-            x - this.w / 2 + state.dx,
-            this.h / 2 - y - state.dy
+            x - this.w / 2 + scene.dx,
+            this.h / 2 - y - scene.dy
         );
     }
 };
@@ -127,14 +137,14 @@ class Drawer {
     
     appendMouse(ev) {
         this.points.push(new DrawPoint(
-            state.screenToPos(ev.clientX, ev.clientY),
+            scene.screenToPos(ev.clientX, ev.clientY),
             1
         ));
     }
     
     appendTouch(touch) {
         this.points.push(new DrawPoint(
-            state.screenToPos(touch.pageX, touch.pageY),
+            scene.screenToPos(touch.pageX, touch.pageY),
             touch.force
         ));
     }
@@ -149,15 +159,15 @@ class Drawer {
             force = ev.pressure;
         }
         this.points.push(new DrawPoint(
-            state.screenToPos(ev.clientX, ev.clientY),
+            scene.screenToPos(ev.clientX, ev.clientY),
             force
         ));
     }
 }
 
 function clear() {
-    ctx.clearRect(0, 0, state.w, state.h);
-    fillCanvas(state.background);
+    ctx.clearRect(0, 0, scene.w, scene.h);
+    fillCanvas(scene.background);
 }
 
 function fillCircle(x, y, r) {
@@ -169,7 +179,7 @@ function fillCircle(x, y, r) {
 function fillCanvas(color) {
     ctx.save();
     ctx.fillStyle = color;
-    ctx.fillRect(0, 0, state.w, state.h);
+    ctx.fillRect(0, 0, scene.w, scene.h);
     ctx.restore();
 }
 
@@ -186,19 +196,19 @@ function cloneCanvas() {
 }
 
 function paint(p, force) {
-    for (let i = 0; i < state.sections; ++i) {
-        let b = state.section * i - p.angle() * Math.pow(-1, i);
+    for (let i = 0; i < scene.sections; ++i) {
+        let b = scene.section * i - p.angle() * Math.pow(-1, i);
         let q = Vec2.fromRad(b).scaled(p.length());
         
-        fillCircle(q.x, q.y, state.strokeWith(force));
+        fillCircle(q.x, q.y, scene.strokeWith(force));
     }
 }
 
 function draw(t) {
     ctx.save();
-    ctx.translate(state.w/2, state.h/2);
+    ctx.translate(scene.w/2, scene.h/2);
     
-    for (let drawer of state.drawers.values()) {
+    for (let drawer of scene.drawers.values()) {
         ctx.fillStyle = drawer.color;
         for (let point of drawer.popPoints()) {
             paint(point.pos, point.force);
@@ -209,13 +219,6 @@ function draw(t) {
 }
 
 // ---
-
-const MOUSE_ID = 'mouse';
-const MAX_SNAPSHOT_HISTORY = 5;
-const STORAGE_KEY_SCENE = 'scene';
-
-const colorPicker = document.getElementById('colorPicker');
-const drawInput = document.getElementById('drawInput');
 
 function loop(t) {
     draw(t);
@@ -247,10 +250,10 @@ function initialize(source) {
     let adjY = (newS - newH) / 2;
     let adjS = (newS - oldS) / 2;
     
-    canvas.width = state.w = newS;
-    canvas.height = state.h = newS;
-    state.dx = adjX;
-    state.dy = adjY;
+    canvas.width = scene.w = newS;
+    canvas.height = scene.h = newS;
+    scene.dx = adjX;
+    scene.dy = adjY;
     canvas.style.left = `${-adjX}px`;
     canvas.style.top = `${-adjY}px`;
     
@@ -265,11 +268,11 @@ function initialize(source) {
 
 function pushSnapshot() {
     let snapshot = cloneCanvas();
-    pushCircular(state.snapshots, snapshot, MAX_SNAPSHOT_HISTORY);
+    pushCircular(scene.snapshots, snapshot, MAX_SNAPSHOT_HISTORY);
 }
 
 function popSnapshot() {
-    let snapshot = state.snapshots.pop();
+    let snapshot = scene.snapshots.pop();
     if (snapshot) initialize(snapshot);
     saveState();
 }
@@ -297,24 +300,20 @@ drawInput.addEventListener('pointerdown', ev => {
     pushSnapshot();
     let drawer = new Drawer(colorPicker.value);
     drawer.appendPointer(ev);
-    state.drawers.set(ev.pointerId, drawer);
+    scene.drawers.set(ev.pointerId, drawer);
 });
 
 drawInput.addEventListener('pointermove', ev => {
-    let drawer = state.drawers.get(ev.pointerId);
+    let drawer = scene.drawers.get(ev.pointerId);
     if (drawer) drawer.appendPointer(ev);
 });
 
 drawInput.addEventListener('pointerup', ev => {
-    state.drawers.delete(ev.pointerId);
+    scene.drawers.delete(ev.pointerId);
     saveState();
 });
 
 // ---
-
-const menuInput = document.getElementById('menu');
-const backgroundPicker = document.getElementById('backgroundPicker');
-const filePicker = document.getElementById('filePicker');
 
 const menuActions = {
     toggleFullscreen() {
@@ -327,7 +326,7 @@ const menuActions = {
     
     save() {
         canvas.toBlob(blob => {
-            let url = URL.createObjectURL(blob);
+            let url = window.URL.createObjectURL(blob);
             window.open(url, '_blank');
         });
     },
@@ -346,16 +345,16 @@ const menuActions = {
     },
     
     mirroring() {
-        let input = window.prompt('Pick mirroring (even number)', state.sections);
+        let input = window.prompt('Pick mirroring (even number)', scene.sections);
         
         let value = parseInt(input, 10);
         
         if (isNaN(value) || value <= 0 || value % 2 != 0) {
-            alert('Try again with an even number.')
+            alert('Try again with an even number.');
             return;
         }
         
-        state.sections = value;
+        scene.sections = value;
     }
 };
 
@@ -365,7 +364,7 @@ menuInput.addEventListener('change', ev => {
 });
 
 backgroundPicker.addEventListener('change', ev => {
-    state.background = backgroundPicker.value;
+    scene.background = backgroundPicker.value;
     clear();
     saveState();
 });
@@ -399,7 +398,7 @@ function readFileAsDataURLAsync(file) {
 
 function loadImageAsync(url) {
     return new Promise((resolve, reject) => {
-        let img = new Image();
+        let img = new window.Image();
         img.onload = () => resolve(img);
         img.src = url;
     });
@@ -407,25 +406,22 @@ function loadImageAsync(url) {
 
 // ---
 
-const MAX_COLOR_HISTORY = 25;
-const pallet = document.getElementById('pallet');
-
 function setColor(value) {
-    addColorHistory(state.color);
+    addColorHistory(scene.color);
     colorPicker.value = value;
-    state.color = value;
+    scene.color = value;
 }
 
 function addColorHistory(value) {
     if (isInColorHistory(value)) return;
     
-    unshiftCircular(state.colorHistory, value, MAX_COLOR_HISTORY);
+    unshiftCircular(scene.colorHistory, value, MAX_COLOR_HISTORY);
     
     renderColorHistory();
 }
 
 function isInColorHistory(value) {
-    return state.colorHistory.indexOf(value) >= 0;
+    return scene.colorHistory.indexOf(value) >= 0;
 }
 
 function renderColorHistory() {
@@ -433,7 +429,7 @@ function renderColorHistory() {
         memory.parentNode.removeChild(memory);
     }
     
-    for (let value of state.colorHistory) {
+    for (let value of scene.colorHistory) {
         let memory = document.createElement('div');
         memory.dataset.value = value;
         memory.classList.add('memory');
@@ -541,6 +537,8 @@ function currentFullscreen() {
         || document.msFullScreenElement
     );
 }
+
+// ---
 
 function lastElement(xs) {
     return xs[xs.length - 1];
