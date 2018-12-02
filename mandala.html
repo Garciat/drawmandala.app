@@ -14,12 +14,14 @@ html, body {
 #scene {
     position: absolute;
     z-index: 1;
+    touch-action: none;
 }
 #drawInput {
     position: absolute;
     top: 0;
     left: 0;
     z-index: 5;
+    touch-action: none;
 }
 #menu {
     position: absolute;
@@ -276,42 +278,20 @@ window.addEventListener('resize', ev => {
     setCanvasSize();
 });
 
-drawInput.addEventListener('mousedown', ev => {
+drawInput.addEventListener('pointerdown', ev => {
     pushSnapshot();
     let drawer = new Drawer(colorPicker.value);
     drawer.appendMouse(ev);
-    state.drawers.set(MOUSE_ID, drawer);
+    state.drawers.set(ev.pointerId, drawer);
 });
 
-drawInput.addEventListener('mousemove', ev => {
-    state.drawers.get(MOUSE_ID).appendMouse(ev);
+drawInput.addEventListener('pointermove', ev => {
+    let drawer = state.drawers.get(ev.pointerId);
+    if (drawer) drawer.appendMouse(ev);
 });
 
-drawInput.addEventListener('mouseup', ev => {
-    state.drawers.delete(MOUSE_ID);
-    saveState();
-});
-
-drawInput.addEventListener('touchstart', ev => {
-    ev.preventDefault();
-    pushSnapshot();
-    for (let touch of Array.from(ev.changedTouches)) {
-        let drawer = new Drawer(colorPicker.value);
-        drawer.appendTouch(ev);
-        state.drawers.set(touch.identifier, drawer);
-    }
-});
-
-drawInput.addEventListener('touchmove', ev => {
-    for (let touch of Array.from(ev.changedTouches)) {
-        state.drawers.get(touch.identifier).appendTouch(touch);
-    }
-});
-
-drawInput.addEventListener('touchend', ev => {
-    for (let touch of Array.from(ev.changedTouches)) {
-        state.drawers.delete(touch.identifier);
-    }
+drawInput.addEventListener('pointerup', ev => {
+    state.drawers.delete(ev.pointerId);
     saveState();
 });
 
