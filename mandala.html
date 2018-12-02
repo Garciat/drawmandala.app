@@ -138,6 +138,21 @@ class Drawer {
             touch.force
         ));
     }
+    
+    appendPointer(ev) {
+        let force;
+        if (ev.pointerType === 'mouse') {
+            force = 0.5;
+        } else if (ev.pointerType === 'touch') {
+            force = 0.5;
+        } else {
+            force = ev.pressure;
+        }
+        this.points.push(new DrawPoint(
+            state.screenToPos(ev.clientX, ev.clientY),
+            force
+        ));
+    }
 }
 
 function clear() {
@@ -281,13 +296,13 @@ window.addEventListener('resize', ev => {
 drawInput.addEventListener('pointerdown', ev => {
     pushSnapshot();
     let drawer = new Drawer(colorPicker.value);
-    drawer.appendMouse(ev);
+    drawer.appendPointer(ev);
     state.drawers.set(ev.pointerId, drawer);
 });
 
 drawInput.addEventListener('pointermove', ev => {
     let drawer = state.drawers.get(ev.pointerId);
-    if (drawer) drawer.appendMouse(ev);
+    if (drawer) drawer.appendPointer(ev);
 });
 
 drawInput.addEventListener('pointerup', ev => {
@@ -392,7 +407,7 @@ function loadImageAsync(url) {
 
 // ---
 
-const MAX_COLOR_HISTORY = 10;
+const MAX_COLOR_HISTORY = 25;
 const pallet = document.getElementById('pallet');
 
 function setColor(value) {
