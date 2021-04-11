@@ -304,8 +304,11 @@ drawInput.addEventListener('pointerdown', ev => {
 });
 
 drawInput.addEventListener('pointermove', ev => {
-    let drawer = scene.drawers.get(ev.pointerId);
-    if (drawer) drawer.appendPointer(ev);
+    let events = 'getCoalescedEvents' in ev ? ev.getCoalescedEvents() : [ev];
+    for (let e of events) {
+        let drawer = scene.drawers.get(ev.pointerId);
+        if (drawer) drawer.appendPointer(ev);
+    }
 });
 
 drawInput.addEventListener('pointerup', ev => {
