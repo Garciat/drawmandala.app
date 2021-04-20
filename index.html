@@ -69,6 +69,7 @@ html, body {
         <option value="fill">Fill</option>
         <option value="mirroring">Mirroring</option>
         <option value="toggleFullscreen">Toggle Fullscreen</option>
+        <option value="about">ℹ️ About</option>
     </select>
     <div id="pallet">
         <input type="color" id="colorPicker" />
@@ -369,6 +370,10 @@ const menuActions = {
         }
         
         scene.sections = value;
+    },
+    
+    about() {
+        window.open('https://github.com/Garciat/drawmandala.app', '_blank');
     }
 };
 
