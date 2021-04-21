@@ -66,6 +66,7 @@ html, body {
         <option value="undo">Undo</option>
         <option value="save">Save</option>
         <option value="load">Load</option>
+        <option value="clear">💣 Clear</option>
         <option value="fill">Fill</option>
         <option value="mirroring">Mirroring</option>
         <option value="toggleFullscreen">Toggle Fullscreen</option>
@@ -349,6 +350,11 @@ const menuActions = {
     load() {
         filePicker.click();
     },
+    
+    clear() {
+        clear();
+        saveStatw();
+    }
     
     fill() {
         backgroundPicker.value = '#000001';
