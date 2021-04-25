@@ -413,14 +413,15 @@ const menuActions = {
 
     async share() {
         let blob = await canvasToBlob();
-        let file = new File([blob], "mandala.png");
+        let file = new File([blob], "mandala.png", {type: 'image/png'});
         let files = [file];
         let shareData = {
             title: 'Mandala',
+            text: 'Check out this mandala I drew using drawmandala.app',
             files: files,
         };
         if (navigator.share) {
-            if (navigator.canShare && !navigator.canShare(shareData)) {
+            if (navigator.canShare && !navigator.canShare({files: files})) {
                 alert(`Your system cannot share this file.`);
                 return;
             }
