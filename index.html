@@ -337,6 +337,36 @@ drawInput.addEventListener('pointerup', ev => {
 
 // ---
 
+function canSaveFile() {
+    return !!window.showSaveFilePicker;
+}
+
+async function saveCanvasAsFile() {
+    let fileHandle = await window.showSaveFilePicker({
+        suggestedName: 'Mandala.png',
+        types: [{
+            description: 'Images',
+            accept: {
+            'image/png': ['.png'],
+            },
+        }],
+    });
+
+    let writable = await fileHandle.createWritable();
+
+    await writable.write(await canvasToBlob());
+
+    await writable.close();
+}
+
+async function openCanvasAsURL() {
+    let blob = await canvasToBlob();
+    let url = window.URL.createObjectURL(blob);
+    window.open(url, '_blank');
+}
+
+// ---
+
 const menuActions = {
     toggleFullscreen() {
         if (currentFullscreen()) {
@@ -346,11 +376,12 @@ const menuActions = {
         }
     },
 
-    save() {
-        canvas.toBlob(blob => {
-            let url = window.URL.createObjectURL(blob);
-            window.open(url, '_blank');
-        });
+    async save() {
+        if (canSaveFile()) {
+            await saveCanvasAsFile();
+        } else {
+            await openCanvasAsURL();
+        }
     },
 
     load() {
