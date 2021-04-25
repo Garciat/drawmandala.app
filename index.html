@@ -124,6 +124,7 @@ class Drawer {
         this.tool = new Croquis.Brush();
         this.tool.setContext(ctx);
         this.tool.setDrawFunction(drawMandalaPoint);
+        this.tool.setSize(10);
     }
 
     down(item) {
@@ -278,12 +279,24 @@ window.addEventListener('resize', ev => {
     setCanvasSize();
 });
 
+function getPointerPressure(ev) {
+    switch (ev.pointerType) {
+    case 'mouse':
+    case 'touch':
+        return 0.5;
+    case 'pen':
+        return ev.pressure;
+    default:
+        return 0.5;
+    }
+}
+
 function readPointerEvent(ev) {
     let rect = canvas.getBoundingClientRect();
     return {
         x: ev.clientX - rect.left,
         y: ev.clientY - rect.top,
-        pressure: ev.pressure ?? 1
+        pressure: getPointerPressure(ev)
     };
 }
 
