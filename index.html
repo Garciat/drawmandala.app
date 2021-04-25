@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
 <title>Draw a Mandala Online</title>
+<link rel="manifest" href="/manifest.json">
 <style type="text/css">
 html, body {
     overflow: hidden;
@@ -564,6 +565,30 @@ window.addEventListener('load', ev => {
     addColorHistory(rgbToHex(0,206,209));
     addColorHistory(rgbToHex(26,28,114));
     addColorHistory(rgbToHex(255, 255, 255));
+});
+
+// ---
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/service-worker.js');
+}
+
+function getPWADisplayMode() {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    if (document.referrer.startsWith('android-app://')) {
+        return 'twa';
+    } else if (navigator.standalone || isStandalone) {
+        return 'standalone';
+    }
+    return 'browser';
+}
+
+window.addEventListener('beforeinstallprompt', (event) => {
+    // nothing
+});
+
+window.addEventListener('appinstalled', (event) => {
+    gtag('event', 'pwa_install');
 });
 
 // ---
