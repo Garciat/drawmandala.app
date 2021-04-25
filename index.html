@@ -107,11 +107,6 @@ let scene = {
 
     drawers: new Map(),
 
-    strokeMin: 0,
-    strokeMax: 3,
-    strokeWith(x) {
-        return this.strokeMin + x * (this.strokeMax - this.strokeMin);
-    },
     color: 'rgb(0, 0, 0)',
     colorHistory: [],
     background: 'rgb(255, 255, 255)',
@@ -119,22 +114,8 @@ let scene = {
     snapshots: [],
 
     sections: 32,
-    get section() { return TAU / this.sections; },
-
-    screenToPos(x, y) {
-        return new Vec2(
-            x - this.w / 2 + scene.dx,
-            this.h / 2 - y - scene.dy
-        );
-    }
+    get section() { return TAU / this.sections; }
 };
-
-class DrawPoint {
-    constructor(pos, force) {
-        this.pos = pos;
-        this.force = force;
-    }
-}
 
 class Drawer {
     constructor(color) {
@@ -143,12 +124,6 @@ class Drawer {
         this.tool = new Croquis.Brush();
         this.tool.setContext(ctx);
         this.tool.setDrawFunction(drawMandalaPoint);
-    }
-
-    popPoints() {
-        let points;
-        [points, this.points] = [this.points, []];
-        return points;
     }
 
     down(item) {
@@ -179,32 +154,11 @@ class Drawer {
             item.pressure
         );
     }
-
-    appendPointer(ev) {
-        let force;
-        if (ev.pointerType === 'mouse') {
-            force = 0.5;
-        } else if (ev.pointerType === 'touch') {
-            force = 0.5;
-        } else {
-            force = ev.pressure;
-        }
-        this.points.push(new DrawPoint(
-            scene.screenToPos(ev.clientX, ev.clientY),
-            force
-        ));
-    }
 }
 
 function clear() {
     ctx.clearRect(0, 0, scene.w, scene.h);
     fillCanvas(scene.background);
-}
-
-function fillCircle(x, y, r) {
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, TAU);
-    ctx.fill();
 }
 
 function fillCanvas(color) {
@@ -224,29 +178,6 @@ function cloneCanvas() {
     context.drawImage(canvas, 0, 0);
 
     return newCanvas;
-}
-
-function paint(p, force) {
-    for (let i = 0; i < scene.sections; ++i) {
-        let b = scene.section * i - p.angle() * Math.pow(-1, i);
-        let q = Vec2.fromRad(b).scaled(p.length());
-
-        fillCircle(q.x, q.y, scene.strokeWith(force));
-    }
-}
-
-function draw(t) {
-    ctx.save();
-    ctx.translate(scene.w/2, scene.h/2);
-
-    for (let drawer of scene.drawers.values()) {
-        ctx.fillStyle = drawer.color;
-        for (let point of drawer.popPoints()) {
-            paint(point.pos, point.force);
-        }
-    }
-
-    ctx.restore();
 }
 
 function drawMandalaPoint(x, y, size) {
@@ -277,14 +208,8 @@ function drawMandalaPoint(x, y, size) {
 
 // ---
 
-function loop(t) {
-    //draw(t);
-    //requestAnimationFrame(loop);
-}
-
 async function onLoad() {
     initialize(await restoreState());
-    requestAnimationFrame(loop);
 }
 
 function setCanvasSize() {
@@ -365,7 +290,6 @@ function readPointerEvent(ev) {
 drawInput.addEventListener('pointerdown', ev => {
     pushSnapshot();
     let drawer = new Drawer(colorPicker.value);
-    drawer.appendPointer(ev);
     drawer.down(readPointerEvent(ev));
     scene.drawers.set(ev.pointerId, drawer);
 });
@@ -375,7 +299,6 @@ drawInput.addEventListener('pointermove', ev => {
     for (let e of events) {
         let drawer = scene.drawers.get(ev.pointerId);
         if (drawer) {
-            //drawer.appendPointer(e);
             drawer.move(readPointerEvent(e));
         }
     }
