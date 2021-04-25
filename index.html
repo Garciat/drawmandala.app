@@ -800,14 +800,18 @@ Croquis.Brush = function () {
         dirtyRect.width = max(dxw, xw) - minX;
         dirtyRect.height = max(dyh, yh) - minY;
     }
-    function drawCircle(size) {
+    function drawCircle(x, y, size) {
         var halfSize = size * 0.5;
+        context.save();
+        context.translate(x, y);
+        context.translate(-halfSize, -halfSize);
         context.fillStyle = color;
         context.globalAlpha = flow;
         context.beginPath();
         context.arc(halfSize, halfSize, halfSize, 0, ONE);
         context.closePath();
         context.fill();
+        context.restore();
     }
     function drawTo(x, y, scale) {
         var scaledSize = size * scale;
@@ -821,12 +825,7 @@ Croquis.Brush = function () {
         var boundHeight = abs(width * sin(ra)) + abs(height * cos(ra));
         x += Math.cos(nrm) * nr + Math.cos(dir) * tr;
         y += Math.sin(nrm) * nr + Math.sin(dir) * tr;
-        context.save();
-        context.translate(x, y);
-        context.rotate(ra);
-        context.translate(-(width * 0.5), -(height * 0.5));
-        drawFunction(width);
-        context.restore();
+        drawFunction(x, y, width);
         appendDirtyRect(x - (boundWidth * 0.5),
                         y - (boundHeight * 0.5),
                         boundWidth, boundHeight);
