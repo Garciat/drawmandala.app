@@ -214,7 +214,7 @@ async function onLoad() {
 }
 
 async function setCanvasSize() {
-    await initialize(cloneCanvas());
+    await initialize(await restoreState());
 }
 
 async function initialize(source) {
