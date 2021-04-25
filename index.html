@@ -613,6 +613,8 @@ function unshiftCircular(xs, x, max) {
     while (xs.length > max) xs.pop();
 }
 
+// ---
+
 const Croquis = {};
 
 Croquis.Stabilizer = function (down, move, up, level, weight,
@@ -700,18 +702,6 @@ Croquis.Brush = function () {
     this.setRandomFunction = function (value) {
         random = value;
     }
-    this.clone = function () {
-        var clone = new Brush(context);
-        clone.setColor(this.getColor());
-        clone.setFlow(this.getFlow());
-        clone.setSize(this.getSize());
-        clone.setSpacing(this.getSpacing());
-        clone.setAngle(this.getAngle());
-        clone.setRotateToDirection(this.getRotateToDirection());
-        clone.setNormalSpread(this.getNormalSpread());
-        clone.setTangentSpread(this.getTangentSpread());
-        clone.setImage(this.getImage());
-    }
     var context = null;
     this.getContext = function () {
         return context;
@@ -725,7 +715,6 @@ Croquis.Brush = function () {
     }
     this.setColor = function (value) {
         color = value;
-        transformedImageIsDirty = true;
     }
     var flow = 1;
     this.getFlow = function() {
@@ -733,7 +722,6 @@ Croquis.Brush = function () {
     }
     this.setFlow = function(value) {
         flow = value;
-        transformedImageIsDirty = true;
     }
     var size = 10;
     this.getSize = function () {
@@ -741,7 +729,6 @@ Croquis.Brush = function () {
     }
     this.setSize = function (value) {
         size = (value < 1) ? 1 : value;
-        transformedImageIsDirty = true;
     }
     var spacing = 0.2;
     this.getSpacing = function () {
@@ -780,27 +767,6 @@ Croquis.Brush = function () {
     this.setTangentSpread = function (value) {
         tangentSpread = value;
     }
-    var image = null;
-    var transformedImage = null;
-    var transformedImageIsDirty = true;
-    var imageRatio = 1;
-    this.getImage = function () {
-        return image;
-    }
-    this.setImage = function (value) {
-        if (value == null) {
-            transformedImage = image = null;
-            imageRatio = 1;
-            drawFunction = drawCircle;
-        }
-        else if (value != image) {
-            image = value;
-            imageRatio = image.height / image.width;
-            transformedImage = document.createElement('canvas');
-            drawFunction = drawImage;
-            transformedImageIsDirty = true;
-        }
-    }
     var delta = 0;
     var prevX = 0;
     var prevY = 0;
@@ -834,20 +800,6 @@ Croquis.Brush = function () {
         dirtyRect.width = max(dxw, xw) - minX;
         dirtyRect.height = max(dyh, yh) - minY;
     }
-    function transformImage() {
-        transformedImage.width = size;
-        transformedImage.height = size * imageRatio;
-        var brushContext = transformedImage.getContext('2d');
-        brushContext.clearRect(0, 0,
-            transformedImage.width, transformedImage.height);
-        brushContext.drawImage(image, 0, 0,
-            transformedImage.width, transformedImage.height);
-        brushContext.globalCompositeOperation = 'source-in';
-        brushContext.fillStyle = color;
-        brushContext.globalAlpha = flow;
-        brushContext.fillRect(0, 0,
-            transformedImage.width, transformedImage.height);
-    }
     function drawCircle(size) {
         var halfSize = size * 0.5;
         context.fillStyle = color;
@@ -857,16 +809,6 @@ Croquis.Brush = function () {
         context.closePath();
         context.fill();
     }
-    function drawImage(size) {
-        if (transformedImageIsDirty)
-            transformImage();
-        try {
-            context.drawImage(transformedImage, 0, 0, size, size * imageRatio);
-        }
-        catch (e) {
-            drawCircle(size);
-        }
-    }
     function drawTo(x, y, scale) {
         var scaledSize = size * scale;
         var nrm = dir + QUARTER;
@@ -874,7 +816,7 @@ Croquis.Brush = function () {
         var tr = tangentSpread * scaledSize * spreadRandom();
         var ra = rotateToDirection ? angle + dir : angle;
         var width = scaledSize;
-        var height = width * imageRatio;
+        var height = width;
         var boundWidth = abs(height * sin(ra)) + abs(width * cos(ra));
         var boundHeight = abs(width * sin(ra)) + abs(height * cos(ra));
         x += Math.cos(nrm) * nr + Math.cos(dir) * tr;
