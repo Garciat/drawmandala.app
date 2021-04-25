@@ -142,6 +142,7 @@ class Drawer {
         this.color = color || 'rgb(0, 0, 0)';
         this.tool = new Croquis.Brush();
         this.tool.setContext(ctx);
+        this.tool.setDrawFunction(drawMandalaPoint);
     }
 
     popPoints() {
@@ -243,6 +244,32 @@ function draw(t) {
         for (let point of drawer.popPoints()) {
             paint(point.pos, point.force);
         }
+    }
+
+    ctx.restore();
+}
+
+function drawMandalaPoint(x, y, size) {
+    let p = new Vec2(
+        x - scene.w / 2,
+        scene.h / 2 - y
+    );
+    var halfSize = size * 0.5;
+
+    ctx.save();
+    ctx.translate(scene.w/2, scene.h/2);
+
+    for (let i = 0; i < scene.sections; ++i) {
+        let b = scene.section * i - p.angle() * Math.pow(-1, i);
+        let q = Vec2.fromRad(b).scaled(p.length());
+
+        ctx.save();
+        ctx.fillStyle = scene.color;
+        ctx.beginPath();
+        ctx.arc(q.x, q.y, halfSize, 0, TAU);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
     }
 
     ctx.restore();
@@ -775,6 +802,9 @@ Croquis.Brush = function () {
     var dir = 0;
     var prevScale = 0;
     var drawFunction = drawCircle;
+    this.setDrawFunction = function (f) {
+        drawFunction = f ?? drawCircle;
+    }
     var reserved = null;
     var dirtyRect;
     function spreadRandom() {
