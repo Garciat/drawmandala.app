@@ -60,7 +60,7 @@ html, body {
 </head>
 
 <body>
-    
+
     <select id="menu">
         <option value="">Menu</option>
         <option value="undo">Undo</option>
@@ -79,8 +79,8 @@ html, body {
     <canvas id="scene" />
     <input type="color" id="backgroundPicker" value="#FFFFFF" />
     <input type="file" id="filePicker" />
-    
-<script> 
+
+<script>
 'use strict';
 
 const TAU = 2 * Math.PI;
@@ -104,9 +104,9 @@ let scene = {
     h: 0,
     dx: 0,
     dy: 0,
-    
+
     drawers: new Map(),
-    
+
     strokeMin: 0,
     strokeMax: 3,
     strokeWith(x) {
@@ -115,12 +115,12 @@ let scene = {
     color: 'rgb(0, 0, 0)',
     colorHistory: [],
     background: 'rgb(255, 255, 255)',
-    
+
     snapshots: [],
-    
+
     sections: 32,
     get section() { return TAU / this.sections; },
-    
+
     screenToPos(x, y) {
         return new Vec2(
             x - this.w / 2 + scene.dx,
@@ -140,28 +140,45 @@ class Drawer {
     constructor(color) {
         this.points = [];
         this.color = color || 'rgb(0, 0, 0)';
+        this.tool = new Croquis.Brush();
+        this.tool.setContext(ctx);
     }
-    
+
     popPoints() {
         let points;
         [points, this.points] = [this.points, []];
         return points;
     }
-    
-    appendMouse(ev) {
-        this.points.push(new DrawPoint(
-            scene.screenToPos(ev.clientX, ev.clientY),
-            1
-        ));
+
+    down(item) {
+        this.stabilizer = new Croquis.Stabilizer(
+            this.tool.down,
+            this.tool.move,
+            this.tool.up,
+            10,
+            0.5,
+            item.x,
+            item.y,
+            item.pressure
+        );
     }
-    
-    appendTouch(touch) {
-        this.points.push(new DrawPoint(
-            scene.screenToPos(touch.pageX, touch.pageY),
-            touch.force
-        ));
+
+    move(item) {
+        this.stabilizer.move(
+            item.x,
+            item.y,
+            item.pressure
+        );
     }
-    
+
+    up(item) {
+        this.stabilizer.up(
+            item.x,
+            item.y,
+            item.pressure
+        );
+    }
+
     appendPointer(ev) {
         let force;
         if (ev.pointerType === 'mouse') {
@@ -212,7 +229,7 @@ function paint(p, force) {
     for (let i = 0; i < scene.sections; ++i) {
         let b = scene.section * i - p.angle() * Math.pow(-1, i);
         let q = Vec2.fromRad(b).scaled(p.length());
-        
+
         fillCircle(q.x, q.y, scene.strokeWith(force));
     }
 }
@@ -220,22 +237,22 @@ function paint(p, force) {
 function draw(t) {
     ctx.save();
     ctx.translate(scene.w/2, scene.h/2);
-    
+
     for (let drawer of scene.drawers.values()) {
         ctx.fillStyle = drawer.color;
         for (let point of drawer.popPoints()) {
             paint(point.pos, point.force);
         }
     }
-    
+
     ctx.restore();
 }
 
 // ---
 
 function loop(t) {
-    draw(t);
-    requestAnimationFrame(loop);
+    //draw(t);
+    //requestAnimationFrame(loop);
 }
 
 async function onLoad() {
@@ -254,27 +271,27 @@ function initialize(source) {
     } else {
         oldS = 0;
     }
-    
+
     let newW = window.innerWidth;
     let newH = window.innerHeight;
     let newS = Math.max(oldS, Math.max(newW, newH));
-    
+
     let adjX = (newS - newW) / 2;
     let adjY = (newS - newH) / 2;
     let adjS = (newS - oldS) / 2;
-    
+
     canvas.width = scene.w = newS;
     canvas.height = scene.h = newS;
     scene.dx = adjX;
     scene.dy = adjY;
     canvas.style.left = `${-adjX}px`;
     canvas.style.top = `${-adjY}px`;
-    
+
     clear();
     if (source) {
         ctx.drawImage(source, adjS, adjS);
     }
-    
+
     drawInput.style.width = `${newW}px`;
     drawInput.style.height = `${newH}px`;
 }
@@ -309,10 +326,20 @@ window.addEventListener('resize', ev => {
     setCanvasSize();
 });
 
+function readPointerEvent(ev) {
+    let rect = canvas.getBoundingClientRect();
+    return {
+        x: ev.clientX - rect.left,
+        y: ev.clientY - rect.top,
+        pressure: ev.pressure ?? 1
+    };
+}
+
 drawInput.addEventListener('pointerdown', ev => {
     pushSnapshot();
     let drawer = new Drawer(colorPicker.value);
     drawer.appendPointer(ev);
+    drawer.down(readPointerEvent(ev));
     scene.drawers.set(ev.pointerId, drawer);
 });
 
@@ -320,11 +347,18 @@ drawInput.addEventListener('pointermove', ev => {
     let events = 'getCoalescedEvents' in ev ? ev.getCoalescedEvents() : [ev];
     for (let e of events) {
         let drawer = scene.drawers.get(ev.pointerId);
-        if (drawer) drawer.appendPointer(ev);
+        if (drawer) {
+            //drawer.appendPointer(e);
+            drawer.move(readPointerEvent(e));
+        }
     }
 });
 
 drawInput.addEventListener('pointerup', ev => {
+    let drawer = scene.drawers.get(ev.pointerId);
+    if (drawer) {
+        drawer.up(readPointerEvent(ev));
+    }
     scene.drawers.delete(ev.pointerId);
     saveState();
 });
@@ -339,45 +373,45 @@ const menuActions = {
             openFullscreen(document.body);
         }
     },
-    
+
     save() {
         canvas.toBlob(blob => {
             let url = window.URL.createObjectURL(blob);
             window.open(url, '_blank');
         });
     },
-    
+
     load() {
         filePicker.click();
     },
-    
+
     clear() {
         clear();
         saveState();
     },
-    
+
     fill() {
         backgroundPicker.value = '#000001';
         backgroundPicker.click();
     },
-    
+
     undo() {
         popSnapshot();
     },
-    
+
     mirroring() {
         let input = window.prompt('Pick mirroring (even number)', scene.sections);
-        
+
         let value = parseInt(input, 10);
-        
+
         if (isNaN(value) || value <= 0 || value % 2 != 0) {
             alert('Try again with an even number.');
             return;
         }
-        
+
         scene.sections = value;
     },
-    
+
     about() {
         window.open('https://github.com/Garciat/drawmandala.app', '_blank');
     }
@@ -397,17 +431,17 @@ backgroundPicker.addEventListener('change', ev => {
 filePicker.addEventListener('change', async function (ev) {
     let files = ev.target.files;
     let file = files[0];
-    
+
     if (!file.type.match('image.*')) {
         alert('Only image files, please.');
         return;
     }
-    
+
     filePicker.value = null;
-    
+
     let url = await readFileAsDataURLAsync(file);
     let img = await loadImageAsync(url);
-    
+
     pushSnapshot();
     initialize(img);
     saveState();
@@ -439,9 +473,9 @@ function setColor(value) {
 
 function addColorHistory(value) {
     if (isInColorHistory(value)) return;
-    
+
     unshiftCircular(scene.colorHistory, value, MAX_COLOR_HISTORY);
-    
+
     renderColorHistory();
 }
 
@@ -453,7 +487,7 @@ function renderColorHistory() {
     for (let memory of document.querySelectorAll('#pallet .memory')) {
         memory.parentNode.removeChild(memory);
     }
-    
+
     for (let value of scene.colorHistory) {
         let memory = document.createElement('div');
         memory.dataset.value = value;
@@ -498,28 +532,28 @@ class Vec2 {
         this.x = x;
         this.y = y;
     }
-    
+
     atan2() {
         return Math.atan2(this.y, this.x);
     }
-    
+
     angle() {
         let a = this.atan2();
         return a >= 0 ? a : (TAU + a);
     }
-    
+
     lengthSq() {
         return this.x*this.x + this.y*this.y;
     }
-    
+
     length() {
         return Math.sqrt(this.lengthSq());
     }
-    
+
     scaled(k) {
         return new Vec2(k * this.x, k * this.y);
     }
-    
+
     static fromRad(r) {
         return new Vec2(Math.cos(r), Math.sin(r));
     }
@@ -578,6 +612,357 @@ function unshiftCircular(xs, x, max) {
     xs.unshift(x);
     while (xs.length > max) xs.pop();
 }
+
+const Croquis = {};
+
+Croquis.Stabilizer = function (down, move, up, level, weight,
+                               x, y, pressure, interval) {
+    interval = interval || 5;
+    var follow = 1 - Math.min(0.95, Math.max(0, weight));
+    var paramTable = [];
+    var current = { x: x, y: y, pressure: pressure };
+    for (var i = 0; i < level; ++i)
+        paramTable.push({ x: x, y: y, pressure: pressure });
+    var first = paramTable[0];
+    var last = paramTable[paramTable.length - 1];
+    var upCalled = false;
+    if (down != null)
+        down(x, y, pressure);
+    window.setTimeout(_move, interval);
+    this.getParamTable = function () { //for test
+        return paramTable;
+    }
+    this.move = function (x, y, pressure) {
+        current.x = x;
+        current.y = y;
+        current.pressure = pressure;
+    }
+    this.up = function (x, y, pressure) {
+        current.x = x;
+        current.y = y;
+        current.pressure = pressure;
+        upCalled = true;
+    }
+    function dlerp(a, d, t) {
+        return a + d * t;
+    }
+    function _move(justCalc) {
+        var curr;
+        var prev;
+        var dx;
+        var dy;
+        var dp;
+        var delta = 0;
+        first.x = current.x;
+        first.y = current.y;
+        first.pressure = current.pressure;
+        for (var i = 1; i < paramTable.length; ++i) {
+            curr = paramTable[i];
+            prev = paramTable[i - 1];
+            dx = prev.x - curr.x;
+            dy = prev.y - curr.y;
+            dp = prev.pressure - curr.pressure;
+            delta += Math.abs(dx);
+            delta += Math.abs(dy);
+            curr.x = dlerp(curr.x, dx, follow);
+            curr.y = dlerp(curr.y, dy, follow);
+            curr.pressure = dlerp(curr.pressure, dp, follow);
+        }
+        if (justCalc)
+            return delta;
+        if (upCalled) {
+            while(delta > 1) {
+                move(last.x, last.y, last.pressure);
+                delta = _move(true);
+            }
+            up(last.x, last.y, last.pressure);
+        }
+        else {
+            move(last.x, last.y, last.pressure);
+            window.setTimeout(_move, interval);
+        }
+    }
+};
+
+Croquis.Brush = function () {
+    // math shortcut
+    var min = Math.min;
+    var max = Math.max;
+    var abs = Math.abs;
+    var sin = Math.sin;
+    var cos = Math.cos;
+    var sqrt = Math.sqrt;
+    var atan2 = Math.atan2;
+    var PI = Math.PI;
+    var ONE = PI + PI;
+    var QUARTER = PI * 0.5;
+    var random = Math.random;
+    this.setRandomFunction = function (value) {
+        random = value;
+    }
+    this.clone = function () {
+        var clone = new Brush(context);
+        clone.setColor(this.getColor());
+        clone.setFlow(this.getFlow());
+        clone.setSize(this.getSize());
+        clone.setSpacing(this.getSpacing());
+        clone.setAngle(this.getAngle());
+        clone.setRotateToDirection(this.getRotateToDirection());
+        clone.setNormalSpread(this.getNormalSpread());
+        clone.setTangentSpread(this.getTangentSpread());
+        clone.setImage(this.getImage());
+    }
+    var context = null;
+    this.getContext = function () {
+        return context;
+    }
+    this.setContext = function (value) {
+        context = value;
+    }
+    var color = '#000';
+    this.getColor = function () {
+        return color;
+    }
+    this.setColor = function (value) {
+        color = value;
+        transformedImageIsDirty = true;
+    }
+    var flow = 1;
+    this.getFlow = function() {
+        return flow;
+    }
+    this.setFlow = function(value) {
+        flow = value;
+        transformedImageIsDirty = true;
+    }
+    var size = 10;
+    this.getSize = function () {
+        return size;
+    }
+    this.setSize = function (value) {
+        size = (value < 1) ? 1 : value;
+        transformedImageIsDirty = true;
+    }
+    var spacing = 0.2;
+    this.getSpacing = function () {
+        return spacing;
+    }
+    this.setSpacing = function (value) {
+        spacing = (value < 0.01) ? 0.01 : value;
+    }
+    var toRad = PI / 180;
+    var toDeg = 1 / toRad;
+    var angle = 0; // radian unit
+    this.getAngle = function () { // returns degree unit
+        return angle * toDeg;
+    }
+    this.setAngle = function (value) {
+        angle = value * toRad;
+    }
+    var rotateToDirection = false;
+    this.getRotateToDirection = function () {
+        return rotateToDirection;
+    }
+    this.setRotateToDirection = function (value) {
+        rotateToDirection = value;
+    }
+    var normalSpread = 0;
+    this.getNormalSpread = function () {
+        return normalSpread;
+    }
+    this.setNormalSpread = function (value) {
+        normalSpread = value;
+    }
+    var tangentSpread = 0;
+    this.getTangentSpread = function () {
+        return tangentSpread;
+    }
+    this.setTangentSpread = function (value) {
+        tangentSpread = value;
+    }
+    var image = null;
+    var transformedImage = null;
+    var transformedImageIsDirty = true;
+    var imageRatio = 1;
+    this.getImage = function () {
+        return image;
+    }
+    this.setImage = function (value) {
+        if (value == null) {
+            transformedImage = image = null;
+            imageRatio = 1;
+            drawFunction = drawCircle;
+        }
+        else if (value != image) {
+            image = value;
+            imageRatio = image.height / image.width;
+            transformedImage = document.createElement('canvas');
+            drawFunction = drawImage;
+            transformedImageIsDirty = true;
+        }
+    }
+    var delta = 0;
+    var prevX = 0;
+    var prevY = 0;
+    var lastX = 0;
+    var lastY = 0;
+    var dir = 0;
+    var prevScale = 0;
+    var drawFunction = drawCircle;
+    var reserved = null;
+    var dirtyRect;
+    function spreadRandom() {
+        return random() - 0.5;
+    }
+    function drawReserved() {
+        if (reserved != null) {
+            drawTo(reserved.x, reserved.y, reserved.scale);
+            reserved = null;
+        }
+    }
+    function appendDirtyRect(x, y, width, height) {
+        if (!(width && height))
+            return;
+        var dxw = dirtyRect.x + dirtyRect.width;
+        var dyh = dirtyRect.y + dirtyRect.height;
+        var xw = x + width;
+        var yh = y + height;
+        var minX = dirtyRect.width ? min(dirtyRect.x, x) : x;
+        var minY = dirtyRect.height ? min(dirtyRect.y, y) : y;
+        dirtyRect.x = minX;
+        dirtyRect.y = minY;
+        dirtyRect.width = max(dxw, xw) - minX;
+        dirtyRect.height = max(dyh, yh) - minY;
+    }
+    function transformImage() {
+        transformedImage.width = size;
+        transformedImage.height = size * imageRatio;
+        var brushContext = transformedImage.getContext('2d');
+        brushContext.clearRect(0, 0,
+            transformedImage.width, transformedImage.height);
+        brushContext.drawImage(image, 0, 0,
+            transformedImage.width, transformedImage.height);
+        brushContext.globalCompositeOperation = 'source-in';
+        brushContext.fillStyle = color;
+        brushContext.globalAlpha = flow;
+        brushContext.fillRect(0, 0,
+            transformedImage.width, transformedImage.height);
+    }
+    function drawCircle(size) {
+        var halfSize = size * 0.5;
+        context.fillStyle = color;
+        context.globalAlpha = flow;
+        context.beginPath();
+        context.arc(halfSize, halfSize, halfSize, 0, ONE);
+        context.closePath();
+        context.fill();
+    }
+    function drawImage(size) {
+        if (transformedImageIsDirty)
+            transformImage();
+        try {
+            context.drawImage(transformedImage, 0, 0, size, size * imageRatio);
+        }
+        catch (e) {
+            drawCircle(size);
+        }
+    }
+    function drawTo(x, y, scale) {
+        var scaledSize = size * scale;
+        var nrm = dir + QUARTER;
+        var nr = normalSpread * scaledSize * spreadRandom();
+        var tr = tangentSpread * scaledSize * spreadRandom();
+        var ra = rotateToDirection ? angle + dir : angle;
+        var width = scaledSize;
+        var height = width * imageRatio;
+        var boundWidth = abs(height * sin(ra)) + abs(width * cos(ra));
+        var boundHeight = abs(width * sin(ra)) + abs(height * cos(ra));
+        x += Math.cos(nrm) * nr + Math.cos(dir) * tr;
+        y += Math.sin(nrm) * nr + Math.sin(dir) * tr;
+        context.save();
+        context.translate(x, y);
+        context.rotate(ra);
+        context.translate(-(width * 0.5), -(height * 0.5));
+        drawFunction(width);
+        context.restore();
+        appendDirtyRect(x - (boundWidth * 0.5),
+                        y - (boundHeight * 0.5),
+                        boundWidth, boundHeight);
+    }
+    this.down = function(x, y, scale) {
+        if (context == null)
+            throw 'brush needs the context';
+        dir = 0;
+        dirtyRect = {x: 0, y: 0, width: 0, height: 0};
+        if (scale > 0) {
+            if (rotateToDirection || normalSpread != 0 || tangentSpread != 0)
+                reserved = {x: x, y: y, scale: scale};
+            else
+                drawTo(x, y, scale);
+        }
+        delta = 0;
+        lastX = prevX = x;
+        lastY = prevY = y;
+        prevScale = scale;
+    }
+    this.move = function(x, y, scale) {
+        if (context == null)
+            throw 'brush needs the context';
+        if (scale <= 0) {
+            delta = 0;
+            prevX = x;
+            prevY = y;
+            prevScale = scale;
+            return;
+        }
+        var dx = x - prevX;
+        var dy = y - prevY;
+        var ds = scale - prevScale;
+        var d = sqrt(dx * dx + dy * dy);
+        prevX = x;
+        prevY = y;
+        delta += d;
+        var midScale = (prevScale + scale) * 0.5;
+        var drawSpacing = size * spacing * midScale;
+        var ldx = x - lastX;
+        var ldy = y - lastY;
+        var ld = sqrt(ldx * ldx + ldy * ldy);
+        dir = atan2(ldy, ldx);
+        if (ldx || ldy)
+            drawReserved();
+        if (drawSpacing < 0.5)
+            drawSpacing = 0.5;
+        if (delta < drawSpacing) {
+            prevScale = scale;
+            return;
+        }
+        var scaleSpacing = ds * (drawSpacing / delta);
+        if (ld < drawSpacing) {
+            lastX = x;
+            lastY = y;
+            drawTo(lastX, lastY, scale);
+            delta -= drawSpacing;
+        } else {
+            while(delta >= drawSpacing) {
+                ldx = x - lastX;
+                ldy = y - lastY;
+                var tx = cos(dir);
+                var ty = sin(dir);
+                lastX += tx * drawSpacing;
+                lastY += ty * drawSpacing;
+                prevScale += scaleSpacing;
+                drawTo(lastX, lastY, prevScale);
+                delta -= drawSpacing;
+            }
+        }
+        prevScale = scale;
+    }
+    this.up = function (x, y, scale) {
+        dir = atan2(y - lastY, x - lastX);
+        drawReserved();
+        return dirtyRect;
+    }
+};
 
 </script>
 </body>
