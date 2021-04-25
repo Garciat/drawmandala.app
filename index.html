@@ -63,6 +63,7 @@ html, body {
 
     <select id="menu">
         <option value="">Menu</option>
+        <option value="share">⤴️ Share</option>
         <option value="undo">Undo</option>
         <option value="save">Save</option>
         <option value="load">Load</option>
@@ -271,6 +272,14 @@ async function restoreState() {
     return await loadImageAsync(url);
 }
 
+function canvasToBlob() {
+    return new Promise(resolve => {
+        canvas.toBlob(blob => {
+            resolve(blob);
+        });
+    });
+}
+
 window.addEventListener('load', ev => {
     onLoad();
 });
@@ -377,6 +386,25 @@ const menuActions = {
 
     about() {
         window.open('https://github.com/Garciat/drawmandala.app', '_blank');
+    },
+
+    async share() {
+        let blob = await canvasToBlob();
+        let file = new File([blob], "mandala.png");
+        let files = [file];
+        let shareData = {
+            title: 'Mandala',
+            files: files,
+        };
+        if (navigator.share) {
+            if (navigator.canShare && !navigator.canShare(shareData)) {
+                alert(`Your system cannot share this file.`);
+                return;
+            }
+            await navigator.share(shareData);
+        } else {
+            alert(`Your system doesn't support sharing files.`);
+        }
     }
 };
 
