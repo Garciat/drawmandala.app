@@ -329,17 +329,48 @@ drawInput.addEventListener('pointerup', ev => {
 
 // ---
 
+function canOpenFile() {
+    return !!window.showOpenFilePicker;
+}
+
+async function openFileToCanvas() {
+    let [fileHandle] = await window.showOpenFilePicker({
+        startIn: 'pictures',
+        multiple: false,
+        excludeAcceptAllOption: true,
+        types: [{
+            description: 'Images',
+            accept: {
+                'image/bmp': ['.bmp'],
+                'image/jpeg': ['.jpg', '.jpeg'],
+                'image/png': ['.png'],
+                'image/webp': ['.webp']
+            },
+        }],
+    });
+
+    let file = await fileHandle.getFile();
+
+    let url = await readFileAsDataURLAsync(file);
+    let img = await loadImageAsync(url);
+
+    pushSnapshot();
+    await initialize(img);
+    saveState();
+}
+
 function canSaveFile() {
     return !!window.showSaveFilePicker;
 }
 
 async function saveCanvasAsFile() {
     let fileHandle = await window.showSaveFilePicker({
+        id: 'importImage',
         suggestedName: 'Mandala.png',
         types: [{
             description: 'Images',
             accept: {
-            'image/png': ['.png'],
+                'image/png': ['.png'],
             },
         }],
     });
@@ -376,8 +407,12 @@ const menuActions = {
         }
     },
 
-    load() {
-        filePicker.click();
+    async load() {
+        if (canOpenFile()) {
+            await openFileToCanvas();
+        } else {
+            filePicker.click();
+        }
     },
 
     clear() {
