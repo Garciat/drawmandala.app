@@ -2,7 +2,7 @@
 <html lang="en-us">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
 <title>Draw a Mandala Online</title>
 <style type="text/css">
 html, body {
@@ -10,6 +10,7 @@ html, body {
     width: 100%;
     height: 100%;
     margin: 0px;
+    background: #AAA;
 }
 #scene {
     position: absolute;
@@ -103,8 +104,6 @@ const ctx = canvas.getContext('2d');
 let scene = {
     w: 0,
     h: 0,
-    dx: 0,
-    dy: 0,
 
     drawers: new Map(),
 
@@ -211,39 +210,32 @@ function drawMandalaPoint(x, y, size) {
 // ---
 
 async function onLoad() {
-    initialize(await restoreState());
+    await initialize(await restoreState());
 }
 
-function setCanvasSize() {
-    initialize(cloneCanvas());
+async function setCanvasSize() {
+    await initialize(cloneCanvas());
 }
 
-function initialize(source) {
-    let oldS;
-    if (source) {
-        oldS = Math.max(source.width, source.height);
-    } else {
-        oldS = 0;
-    }
+async function initialize(source) {
+    canvas.width = 0;
+    canvas.height = 0;
 
     let newW = window.innerWidth;
     let newH = window.innerHeight;
-    let newS = Math.max(oldS, Math.max(newW, newH));
+    let newS = Math.max(newW, newH);
 
     let adjX = (newS - newW) / 2;
     let adjY = (newS - newH) / 2;
-    let adjS = (newS - oldS) / 2;
 
     canvas.width = scene.w = newS;
     canvas.height = scene.h = newS;
-    scene.dx = adjX;
-    scene.dy = adjY;
     canvas.style.left = `${-adjX}px`;
     canvas.style.top = `${-adjY}px`;
 
     clear();
     if (source) {
-        ctx.drawImage(source, adjS, adjS);
+        ctx.drawImage(source, 0, 0, source.width, source.height, 0, 0, newS, newS);
     }
 
     drawInput.style.width = `${newW}px`;
@@ -255,9 +247,9 @@ function pushSnapshot() {
     pushCircular(scene.snapshots, snapshot, MAX_SNAPSHOT_HISTORY);
 }
 
-function popSnapshot() {
+async function popSnapshot() {
     let snapshot = scene.snapshots.pop();
-    if (snapshot) initialize(snapshot);
+    if (snapshot) await initialize(snapshot);
     saveState();
 }
 
@@ -332,7 +324,7 @@ drawInput.addEventListener('pointerup', ev => {
         drawer.up(readPointerEvent(ev));
     }
     scene.drawers.delete(ev.pointerId);
-    saveState();
+    sleep(100).then(() => saveState());
 });
 
 // ---
@@ -398,8 +390,8 @@ const menuActions = {
         backgroundPicker.click();
     },
 
-    undo() {
-        popSnapshot();
+    async undo() {
+        await popSnapshot();
     },
 
     mirroring() {
@@ -465,7 +457,7 @@ filePicker.addEventListener('change', async function (ev) {
     let img = await loadImageAsync(url);
 
     pushSnapshot();
-    initialize(img);
+    await initialize(img);
     saveState();
 });
 
@@ -535,6 +527,7 @@ window.addEventListener('load', ev => {
     addColorHistory(rgbToHex(246,84,106));
     addColorHistory(rgbToHex(0,206,209));
     addColorHistory(rgbToHex(26,28,114));
+    addColorHistory(rgbToHex(255, 255, 255));
 });
 
 // ---
@@ -633,6 +626,14 @@ function pushCircular(xs, x, max) {
 function unshiftCircular(xs, x, max) {
     xs.unshift(x);
     while (xs.length > max) xs.pop();
+}
+
+// ---
+
+function sleep(t) {
+    return new Promise(resolve => {
+        setTimeout(() => resolve(), t);
+    });
 }
 
 // ---
