@@ -33,6 +33,9 @@ html, body {
     z-index: 10;
     width: 5em;
 }
+#filePicker, #backgroundPicker {
+    visibility: hidden;
+}
 #pallet {
     position: absolute;
     top: 0px;
@@ -94,6 +97,8 @@ const TAU = 2 * Math.PI;
 const STORAGE_KEY_SCENE = 'scene';
 const MAX_SNAPSHOT_HISTORY = 5;
 const MAX_COLOR_HISTORY = 25;
+const MAX_ZOOM = 5;
+const MIN_ZOOM = 0.2;
 
 const drawInput = document.getElementById('drawInput');
 const menuInput = document.getElementById('menu');
@@ -201,6 +206,12 @@ function viewportToScene(x, y) {
     return [sceneX, sceneY];
 }
 
+function sceneToViewport(x, y) {
+    let vx = (x - scene.viewport.x) * scene.viewport.zoom;
+    let vy = (y - scene.viewport.y) * scene.viewport.zoom;
+    return [vx, vy];
+}
+
 function viewportDimensions() {
     let vw = displayCanvas.width;
     let vh = displayCanvas.height;
@@ -222,25 +233,60 @@ function centerViewport() {
     scene.viewport.zoom = z;
 }
 
+function panViewportBy(dx, dy) {
+    scene.viewport.x += dx / scene.viewport.zoom;
+    scene.viewport.y += dy / scene.viewport.zoom;
+}
+
+// this was hard...
+function zoomViewportAt(x, y, dz) {
+    let z = scene.viewport.zoom;
+    let z_ = z + dz;
+
+    if ((z_ < MIN_ZOOM && dz < 0) || (z > MAX_ZOOM && dz > 0)) return;
+
+    let [vw, vh] = viewportDimensions();
+
+    let rx = x / vw;
+    let ry = y / vh;
+
+    let svw = vw / scene.viewport.zoom;
+    let svh = vh / scene.viewport.zoom;
+
+    let rz = z / z_;
+
+    let dsvw = svw * rz - svw;
+    let dsvh = svh * rz - svh;
+
+    let dvx = -rx * dsvw;
+    let dvy = -ry * dsvh;
+
+    scene.viewport.x += dvx;
+    scene.viewport.y += dvy;
+    scene.viewport.zoom += dz;
+}
+
 function drawMandalaPoint(x, y, size) {
     let [sceneX, sceneY] = viewportToScene(x, y);
 
-    drawMandalaPointDirect(primaryCtx, sceneX, sceneY, size / scene.viewport.zoom);
-    drawMandalaPointDirect(displayCtx, x, y, size);
+    let [cx, cy] = sceneToViewport(scene.w/2, scene.h/2);
+
+    drawMandalaPointDirect(primaryCtx, scene.w/2, scene.h/2, sceneX, sceneY, size);
+    drawMandalaPointDirect(displayCtx, cx, cy, x, y, size * scene.viewport.zoom);
 }
 
-function drawMandalaPointDirect(ctx, x, y, size) {
+function drawMandalaPointDirect(ctx, cx, cy, x, y, size) {
     let w = ctx.canvas.width;
     let h = ctx.canvas.height;
 
     let p = new Vec2(
-        x - w / 2,
-        h / 2 - y
+        x - cx,
+        cy - y
     );
     var halfSize = size * 0.5;
 
     ctx.save();
-    ctx.translate(w/2, h/2);
+    ctx.translate(cx, cy);
 
     for (let i = 0; i < scene.sections; ++i) {
         let b = scene.section * i - p.angle() * Math.pow(-1, i);
@@ -265,10 +311,6 @@ async function onLoad() {
 }
 
 async function setCanvasSize() {
-    await initialize(await restoreState());
-}
-
-async function initialize(source) {
     let newW = window.innerWidth;
     let newH = window.innerHeight;
 
@@ -277,6 +319,12 @@ async function initialize(source) {
 
     drawInput.style.width = `${newW}px`;
     drawInput.style.height = `${newH}px`;
+
+    redrawPrimary();
+}
+
+async function initialize(source) {
+    setCanvasSize();
 
     primaryCanvas.width = scene.w;
     primaryCanvas.height = scene.h;
@@ -301,7 +349,8 @@ function redrawPrimary() {
     let sw = dw / scene.viewport.zoom;
     let sh = dh / scene.viewport.zoom;
 
-    displayCtx.drawImage(primaryCanvas, sx, sy, sw, sh, dx, dy, dw, dh);
+    displayCtx.clearRect(0, 0, dw, dh);
+    displayCtx.drawImage(...getSafeRect(primaryCanvas, sx, sy, sw, sh, dx, dy, dw, dh))
 }
 
 function pushSnapshot() {
@@ -388,6 +437,41 @@ drawInput.addEventListener('pointerup', ev => {
     scene.drawers.delete(ev.pointerId);
     sleep(100).then(() => saveState());
 });
+
+drawInput.addEventListener('wheel', ev => {
+    ev.preventDefault();
+
+    if (ev.ctrlKey) {
+        //scene.viewport.zoom += ev.deltaY * 0.01;
+        zoomViewportAt(ev.clientX, ev.clientY, -ev.deltaY * 0.01);
+    } else {
+        panViewportBy(ev.deltaX * 2, ev.deltaY * 2);
+    }
+
+    redrawPrimary();
+});
+
+(() => {
+    let startScale;
+
+    window.addEventListener("gesturestart", function (e) {
+        e.preventDefault();
+        startScale = scene.viewport.zoom;
+    });
+
+    window.addEventListener("gesturechange", function (e) {
+        e.preventDefault();
+
+        let newZoom = startScale * e.scale;
+        zoomViewportAt(e.clientX, e.clientY, newZoom - scene.viewport.zoom);
+
+        redrawPrimary();
+    })
+
+    window.addEventListener("gestureend", function (e) {
+        e.preventDefault();
+    });
+})();
 
 // ---
 
@@ -756,6 +840,48 @@ function sleep(t) {
     return new Promise(resolve => {
         setTimeout(() => resolve(), t);
     });
+}
+
+// ---
+
+// https://gist.github.com/Kaiido/ca9c837382d89b9d0061e96181d1d862
+function getSafeRect(source, sx, sy, sw, sh, dx, dy, dw, dh) {
+    const { width, height } = source;
+
+    if( sw < 0 ) {
+        sx += sw;
+        sw = Math.abs( sw );
+    }
+    if( sh < 0 ) {
+        sy += sh;
+        sh = Math.abs( sh );
+    }
+    if( dw < 0 ) {
+        dx += dw;
+        dw = Math.abs( dw );
+    }
+    if( dh < 0 ) {
+        dy += dh;
+        dh = Math.abs( dh );
+    }
+    const x1 = Math.max( sx, 0 );
+    const x2 = Math.min( sx + sw, width );
+    const y1 = Math.max( sy, 0 );
+    const y2 = Math.min( sy + sh, height );
+    const w_ratio = dw / sw;
+    const h_ratio = dh / sh;
+
+    return [
+        source,
+        x1,
+        y1,
+        x2 - x1,
+        y2 - y1,
+        sx < 0 ? dx - (sx * w_ratio) : dx,
+        sy < 0 ? dy - (sy * h_ratio) : dy,
+        (x2 - x1) * w_ratio,
+        (y2 - y1) * h_ratio
+    ];
 }
 
 // ---
