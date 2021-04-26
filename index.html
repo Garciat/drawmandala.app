@@ -413,31 +413,111 @@ function readPointerEvent(ev) {
     };
 }
 
-drawInput.addEventListener('pointerdown', ev => {
+function handleDrawDown(ev) {
     pushSnapshot();
     let drawer = new Drawer(colorPicker.value);
     drawer.down(readPointerEvent(ev));
     scene.drawers.set(ev.pointerId, drawer);
-});
+}
 
-drawInput.addEventListener('pointermove', ev => {
-    let events = 'getCoalescedEvents' in ev ? ev.getCoalescedEvents() : [ev];
-    for (let e of events) {
-        let drawer = scene.drawers.get(ev.pointerId);
-        if (drawer) {
+function handleDrawMove(ev) {
+    let drawer = scene.drawers.get(ev.pointerId);
+    if (drawer) {
+        let events = 'getCoalescedEvents' in ev ? ev.getCoalescedEvents() : [ev];
+        for (let e of events) {
             drawer.move(readPointerEvent(e));
         }
     }
-});
+}
 
-drawInput.addEventListener('pointerup', ev => {
+function handleDrawUp(ev) {
     let drawer = scene.drawers.get(ev.pointerId);
     if (drawer) {
         drawer.up(readPointerEvent(ev));
+        scene.drawers.delete(ev.pointerId);
+        sleep(100).then(() => saveState());
     }
-    scene.drawers.delete(ev.pointerId);
-    sleep(100).then(() => saveState());
-});
+}
+
+(() => {
+    const GESTURE_TIMEOUT = 50;
+    let pointerDownEvents = new Map();
+    let firstPointerTime = 0;
+    let startZoom = 0;
+    let startDistance = 0;
+    let drawTimeout = 0;
+
+    drawInput.addEventListener('pointerdown', ev => {
+        pointerDownEvents.set(ev.pointerId, ev);
+
+        switch (pointerDownEvents.size) {
+        case 1:
+            drawTimeout = setTimeout(() => handleDrawDown(ev), GESTURE_TIMEOUT);
+            firstPointerTime = performance.now();
+            break;
+        case 2:
+            if (performance.now() - firstPointerTime > GESTURE_TIMEOUT) {
+                pointerDownEvents.delete(ev.pointerId, ev);
+                return;
+            }
+
+            clearTimeout(drawTimeout);
+
+            startZoom = scene.viewport.zoom;
+            startDistance = pointerPairDistance(...pointerDownEvents.values());
+            break;
+        }
+    });
+
+    function pointerPairCenter(pa, pb) {
+        // TODO relative to target rect?
+        let cx = (pa.clientX + pb.clientX) / 2;
+        let cy = (pa.clientY + pb.clientY) / 2;
+        return [cx, cy];
+    }
+
+    function pointerPairDistance(pa, pb) {
+        // TODO relative to target rect?
+        let dx = pa.clientX - pb.clientX;
+        let dy = pa.clientY - pb.clientY;
+        return Math.sqrt(dx*dx + dy*dy);
+    }
+
+    drawInput.addEventListener('pointermove', ev => {
+
+        switch (pointerDownEvents.size) {
+        case 1:
+            handleDrawMove(ev);
+            break;
+        case 2:
+            let [ax, ay] = pointerPairCenter(...pointerDownEvents.values());
+
+            pointerDownEvents.set(ev.pointerId, ev);
+
+            let [bx, by] = pointerPairCenter(...pointerDownEvents.values());
+            let bs = pointerPairDistance(...pointerDownEvents.values());
+
+            let dx = bx - ax;
+            let dy = by - ay;
+            let ds = bs / startDistance;
+
+            panViewportBy(-dx, -dy);
+
+            let newZoom = startZoom * ds;
+            let dz = newZoom - scene.viewport.zoom;
+            zoomViewportAt(bx, by, dz);
+
+            redrawPrimary();
+            break;
+        }
+    });
+
+    drawInput.addEventListener('pointerup', ev => {
+        handleDrawUp(ev);
+
+        pointerDownEvents.delete(ev.pointerId);
+    });
+})();
 
 drawInput.addEventListener('wheel', ev => {
     ev.preventDefault();
