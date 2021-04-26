@@ -334,9 +334,13 @@ async function initialize(source) {
     centerViewport();
 
     if (source) {
-        primaryCtx.drawImage(source, 0, 0, source.width, source.height, 0, 0, scene.w, scene.h);
-        redrawPrimary();
+        loadToPrimary(source);
     }
+}
+
+function loadToPrimary(source) {
+    primaryCtx.drawImage(source, 0, 0, source.width, source.height, 0, 0, scene.w, scene.h);
+    redrawPrimary();
 }
 
 function redrawPrimary() {
@@ -361,8 +365,10 @@ function pushSnapshot() {
 
 async function popSnapshot() {
     let snapshot = scene.snapshots.pop();
-    if (snapshot) await initialize(snapshot);
-    saveState();
+    if (snapshot) {
+        loadToPrimary(snapshot);
+        saveState();
+    }
 }
 
 function saveState() {
