@@ -109,12 +109,14 @@ const displayCanvas = document.getElementById('scene');
 const displayCtx = displayCanvas.getContext('2d');
 
 let scene = {
-    // w, h, dx, dw : in scale dims
-    w: 0,
-    h: 0,
-    dx: 0,
-    dy: 0,
-    scale: 2,
+    w: 3000,
+    h: 3000,
+
+    viewport: {
+        x: 0,
+        y: 0,
+        zoom: 1,
+    },
 
     drawers: new Map(),
 
@@ -193,8 +195,37 @@ function cloneCanvas(source) {
     return newCanvas;
 }
 
+function viewportToScene(x, y) {
+    let sceneX = scene.viewport.x + x / scene.viewport.zoom;
+    let sceneY = scene.viewport.y + y / scene.viewport.zoom;
+    return [sceneX, sceneY];
+}
+
+function viewportDimensions() {
+    let vw = displayCanvas.width;
+    let vh = displayCanvas.height;
+    return [vw, vh];
+}
+
+function centerViewport() {
+    let [vw, vh] = viewportDimensions();
+
+    let wz = vw / scene.w;
+    let hz = vh / scene.h;
+    let z = Math.max(wz, hz);
+
+    let dx = (scene.w - vw / z) / 2;
+    let dy = (scene.h - vh / z) / 2;
+
+    scene.viewport.x = dx;
+    scene.viewport.y = dy;
+    scene.viewport.zoom = z;
+}
+
 function drawMandalaPoint(x, y, size) {
-    drawMandalaPointDirect(primaryCtx, x * scene.scale + scene.dx, y * scene.scale + scene.dy, size * scene.scale);
+    let [sceneX, sceneY] = viewportToScene(x, y);
+
+    drawMandalaPointDirect(primaryCtx, sceneX, sceneY, size / scene.viewport.zoom);
     drawMandalaPointDirect(displayCtx, x, y, size);
 }
 
@@ -247,32 +278,28 @@ async function initialize(source) {
     drawInput.style.width = `${newW}px`;
     drawInput.style.height = `${newH}px`;
 
-    let s = scene.scale * Math.max(newW, newH);
-    let dx = (s - newW * scene.scale) / 2;
-    let dy = (s - newH * scene.scale) / 2;
-
-    primaryCanvas.width = scene.w = s;
-    primaryCanvas.height = scene.h = s;
-    scene.dx = dx;
-    scene.dy = dy;
+    primaryCanvas.width = scene.w;
+    primaryCanvas.height = scene.h;
 
     clear();
+    centerViewport();
+
     if (source) {
-        primaryCtx.drawImage(source, 0, 0, source.width, source.height, 0, 0, s, s);
+        primaryCtx.drawImage(source, 0, 0, source.width, source.height, 0, 0, scene.w, scene.h);
         redrawPrimary();
     }
 }
 
 function redrawPrimary() {
-    let sx = scene.dx;
-    let sy = scene.dy;
-    let sw = scene.w - 2 * scene.dx;
-    let sh = scene.h - 2 * scene.dy;
-
     let dx = 0;
     let dy = 0;
     let dw = displayCanvas.width;
     let dh = displayCanvas.height;
+
+    let sx = scene.viewport.x;
+    let sy = scene.viewport.y;
+    let sw = dw / scene.viewport.zoom;
+    let sh = dh / scene.viewport.zoom;
 
     displayCtx.drawImage(primaryCanvas, sx, sy, sw, sh, dx, dy, dw, dh);
 }
