@@ -96,18 +96,25 @@ const MAX_SNAPSHOT_HISTORY = 5;
 const MAX_COLOR_HISTORY = 25;
 
 const drawInput = document.getElementById('drawInput');
-const canvas = document.getElementById('scene');
 const menuInput = document.getElementById('menu');
 const colorPicker = document.getElementById('colorPicker');
 const backgroundPicker = document.getElementById('backgroundPicker');
 const filePicker = document.getElementById('filePicker');
 const pallet = document.getElementById('pallet');
 
-const ctx = canvas.getContext('2d');
+const primaryCanvas = document.createElement('canvas');
+const primaryCtx = primaryCanvas.getContext('2d');
+
+const displayCanvas = document.getElementById('scene');
+const displayCtx = displayCanvas.getContext('2d');
 
 let scene = {
+    // w, h, dx, dw : in scale dims
     w: 0,
     h: 0,
+    dx: 0,
+    dy: 0,
+    scale: 2,
 
     drawers: new Map(),
 
@@ -126,7 +133,6 @@ class Drawer {
         this.points = [];
         this.color = color || 'rgb(0, 0, 0)';
         this.tool = new Croquis.Brush();
-        this.tool.setContext(ctx);
         this.tool.setDrawFunction(drawMandalaPoint);
         this.tool.setSize(10);
     }
@@ -162,38 +168,48 @@ class Drawer {
 }
 
 function clear() {
-    ctx.clearRect(0, 0, scene.w, scene.h);
-    fillCanvas(scene.background);
+    primaryCtx.clearRect(0, 0, primaryCanvas.width, primaryCanvas.height);
+    displayCtx.clearRect(0, 0, displayCanvas.width, displayCanvas.height);
+    fillCanvas(primaryCtx, scene.background);
+    fillCanvas(displayCtx, scene.background);
 }
 
-function fillCanvas(color) {
+function fillCanvas(ctx, color) {
     ctx.save();
     ctx.fillStyle = color;
-    ctx.fillRect(0, 0, scene.w, scene.h);
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     ctx.restore();
 }
 
-function cloneCanvas() {
+function cloneCanvas(source) {
     var newCanvas = document.createElement('canvas');
     var context = newCanvas.getContext('2d');
 
-    newCanvas.width = canvas.width;
-    newCanvas.height = canvas.height;
+    newCanvas.width = source.width;
+    newCanvas.height = source.height;
 
-    context.drawImage(canvas, 0, 0);
+    context.drawImage(source, 0, 0);
 
     return newCanvas;
 }
 
 function drawMandalaPoint(x, y, size) {
+    drawMandalaPointDirect(primaryCtx, x * scene.scale + scene.dx, y * scene.scale + scene.dy, size * scene.scale);
+    drawMandalaPointDirect(displayCtx, x, y, size);
+}
+
+function drawMandalaPointDirect(ctx, x, y, size) {
+    let w = ctx.canvas.width;
+    let h = ctx.canvas.height;
+
     let p = new Vec2(
-        x - scene.w / 2,
-        scene.h / 2 - y
+        x - w / 2,
+        h / 2 - y
     );
     var halfSize = size * 0.5;
 
     ctx.save();
-    ctx.translate(scene.w/2, scene.h/2);
+    ctx.translate(w/2, h/2);
 
     for (let i = 0; i < scene.sections; ++i) {
         let b = scene.section * i - p.angle() * Math.pow(-1, i);
@@ -222,32 +238,47 @@ async function setCanvasSize() {
 }
 
 async function initialize(source) {
-    canvas.width = 0;
-    canvas.height = 0;
-
     let newW = window.innerWidth;
     let newH = window.innerHeight;
-    let newS = Math.max(newW, newH);
 
-    let adjX = (newS - newW) / 2;
-    let adjY = (newS - newH) / 2;
-
-    canvas.width = scene.w = newS;
-    canvas.height = scene.h = newS;
-    canvas.style.left = `${-adjX}px`;
-    canvas.style.top = `${-adjY}px`;
-
-    clear();
-    if (source) {
-        ctx.drawImage(source, 0, 0, source.width, source.height, 0, 0, newS, newS);
-    }
+    displayCanvas.width = newW;
+    displayCanvas.height = newH;
 
     drawInput.style.width = `${newW}px`;
     drawInput.style.height = `${newH}px`;
+
+    let s = scene.scale * Math.max(newW, newH);
+    let dx = (s - newW * scene.scale) / 2;
+    let dy = (s - newH * scene.scale) / 2;
+
+    primaryCanvas.width = scene.w = s;
+    primaryCanvas.height = scene.h = s;
+    scene.dx = dx;
+    scene.dy = dy;
+
+    clear();
+    if (source) {
+        primaryCtx.drawImage(source, 0, 0, source.width, source.height, 0, 0, s, s);
+        redrawPrimary();
+    }
+}
+
+function redrawPrimary() {
+    let sx = scene.dx;
+    let sy = scene.dy;
+    let sw = scene.w - 2 * scene.dx;
+    let sh = scene.h - 2 * scene.dy;
+
+    let dx = 0;
+    let dy = 0;
+    let dw = displayCanvas.width;
+    let dh = displayCanvas.height;
+
+    displayCtx.drawImage(primaryCanvas, sx, sy, sw, sh, dx, dy, dw, dh);
 }
 
 function pushSnapshot() {
-    let snapshot = cloneCanvas();
+    let snapshot = cloneCanvas(primaryCanvas);
     pushCircular(scene.snapshots, snapshot, MAX_SNAPSHOT_HISTORY);
 }
 
@@ -258,7 +289,7 @@ async function popSnapshot() {
 }
 
 function saveState() {
-    let url = cloneCanvas().toDataURL();
+    let url = cloneCanvas(primaryCanvas).toDataURL();
     window.localStorage.setItem(STORAGE_KEY_SCENE, url);
 }
 
@@ -270,7 +301,7 @@ async function restoreState() {
 
 function canvasToBlob() {
     return new Promise(resolve => {
-        canvas.toBlob(blob => {
+        primaryCanvas.toBlob(blob => {
             resolve(blob);
         });
     });
@@ -297,7 +328,7 @@ function getPointerPressure(ev) {
 }
 
 function readPointerEvent(ev) {
-    let rect = canvas.getBoundingClientRect();
+    let rect = drawInput.getBoundingClientRect();
     return {
         x: ev.clientX - rect.left,
         y: ev.clientY - rect.top,
@@ -789,13 +820,6 @@ Croquis.Brush = function () {
     this.setRandomFunction = function (value) {
         random = value;
     }
-    var context = null;
-    this.getContext = function () {
-        return context;
-    }
-    this.setContext = function (value) {
-        context = value;
-    }
     var color = '#000';
     this.getColor = function () {
         return color;
@@ -861,9 +885,9 @@ Croquis.Brush = function () {
     var lastY = 0;
     var dir = 0;
     var prevScale = 0;
-    var drawFunction = drawCircle;
+    var drawFunction = undefined;
     this.setDrawFunction = function (f) {
-        drawFunction = f ?? drawCircle;
+        drawFunction = f;
     }
     var reserved = null;
     var dirtyRect;
@@ -890,19 +914,6 @@ Croquis.Brush = function () {
         dirtyRect.width = max(dxw, xw) - minX;
         dirtyRect.height = max(dyh, yh) - minY;
     }
-    function drawCircle(x, y, size) {
-        var halfSize = size * 0.5;
-        context.save();
-        context.translate(x, y);
-        context.translate(-halfSize, -halfSize);
-        context.fillStyle = color;
-        context.globalAlpha = flow;
-        context.beginPath();
-        context.arc(halfSize, halfSize, halfSize, 0, ONE);
-        context.closePath();
-        context.fill();
-        context.restore();
-    }
     function drawTo(x, y, scale) {
         var scaledSize = size * scale;
         var nrm = dir + QUARTER;
@@ -921,8 +932,6 @@ Croquis.Brush = function () {
                         boundWidth, boundHeight);
     }
     this.down = function(x, y, scale) {
-        if (context == null)
-            throw 'brush needs the context';
         dir = 0;
         dirtyRect = {x: 0, y: 0, width: 0, height: 0};
         if (scale > 0) {
@@ -937,8 +946,6 @@ Croquis.Brush = function () {
         prevScale = scale;
     }
     this.move = function(x, y, scale) {
-        if (context == null)
-            throw 'brush needs the context';
         if (scale <= 0) {
             delta = 0;
             prevX = x;
