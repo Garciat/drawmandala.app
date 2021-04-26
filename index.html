@@ -520,15 +520,16 @@ function handleDrawUp(ev) {
 
     drawInput.addEventListener('pointerup', ev => {
         handleDrawUp(ev);
-
         pointerDownEvents.delete(ev.pointerId);
     });
 
     drawInput.addEventListener('pointerout', ev => {
+        handleDrawUp(ev);
         pointerDownEvents.delete(ev.pointerId);
     });
 
     drawInput.addEventListener('pointercancel', ev => {
+        handleDrawUp(ev);
         pointerDownEvents.delete(ev.pointerId);
     });
 })();
