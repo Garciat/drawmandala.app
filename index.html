@@ -517,6 +517,14 @@ function handleDrawUp(ev) {
 
         pointerDownEvents.delete(ev.pointerId);
     });
+
+    drawInput.addEventListener('pointerout', ev => {
+        pointerDownEvents.delete(ev.pointerId);
+    });
+
+    drawInput.addEventListener('pointercancel', ev => {
+        pointerDownEvents.delete(ev.pointerId);
+    });
 })();
 
 drawInput.addEventListener('wheel', ev => {
