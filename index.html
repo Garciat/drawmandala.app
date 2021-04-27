@@ -135,44 +135,105 @@ let scene = {
     get section() { return TAU / this.sections; }
 };
 
-class Drawer {
-    constructor(color) {
-        this.points = [];
-        this.color = color || 'rgb(0, 0, 0)';
-        this.tool = new Croquis.Brush();
-        this.tool.setDrawFunction(drawMandalaPoint);
-        this.tool.setSize(10);
-    }
+// ---
 
-    down(item) {
-        this.stabilizer = new Croquis.Stabilizer(
-            this.tool.down,
-            this.tool.move,
-            this.tool.up,
-            10,
-            0.5,
-            item.x,
-            item.y,
-            item.pressure
-        );
-    }
+async function onLoad() {
+    await initialize(await restoreState());
+}
 
-    move(item) {
-        this.stabilizer.move(
-            item.x,
-            item.y,
-            item.pressure
-        );
-    }
+async function initialize(source) {
+    resetDisplaySize();
 
-    up(item) {
-        this.stabilizer.up(
-            item.x,
-            item.y,
-            item.pressure
-        );
+    primaryCanvas.width = scene.w;
+    primaryCanvas.height = scene.h;
+
+    clear();
+    centerViewport();
+
+    if (source) {
+        loadToPrimary(source);
     }
 }
+
+window.addEventListener('load', ev => {
+    onLoad();
+});
+
+window.addEventListener('resize', ev => {
+    resetDisplaySize();
+});
+
+// ---
+
+function pushSnapshot() {
+    let snapshot = cloneCanvas(primaryCanvas);
+    pushCircular(scene.snapshots, snapshot, MAX_SNAPSHOT_HISTORY);
+}
+
+async function popSnapshot() {
+    let snapshot = scene.snapshots.pop();
+    if (snapshot) {
+        loadToPrimary(snapshot);
+        saveState();
+    }
+}
+
+function saveState() {
+    let url = cloneCanvas(primaryCanvas).toDataURL();
+    window.localStorage.setItem(STORAGE_KEY_SCENE, url);
+}
+
+async function restoreState() {
+    let url = window.localStorage.getItem(STORAGE_KEY_SCENE);
+    if (!url) return null;
+    return await loadImageAsync(url);
+}
+
+// ---
+
+async function resetDisplaySize() {
+    let newW = window.innerWidth;
+    let newH = window.innerHeight;
+
+    displayCanvas.width = newW;
+    displayCanvas.height = newH;
+
+    drawInput.style.width = `${newW}px`;
+    drawInput.style.height = `${newH}px`;
+
+    centerViewport();
+    redrawPrimary();
+}
+
+// ---
+
+function cloneCanvas(source) {
+    var newCanvas = document.createElement('canvas');
+    var context = newCanvas.getContext('2d');
+
+    newCanvas.width = source.width;
+    newCanvas.height = source.height;
+
+    context.drawImage(source, 0, 0);
+
+    return newCanvas;
+}
+
+async function openCanvasAsURL() {
+    let blob = await canvasToBlob();
+    let url = window.URL.createObjectURL(blob);
+    window.open(url, '_blank');
+}
+
+function canvasToBlob() {
+    return new Promise(resolve => {
+        primaryCanvas.toBlob(blob => {
+            resolve(blob);
+        });
+    });
+}
+
+// ---
 
 function clear() {
     primaryCtx.clearRect(0, 0, primaryCanvas.width, primaryCanvas.height);
@@ -188,17 +249,27 @@ function fillCanvas(ctx, color) {
     ctx.restore();
 }
 
-function cloneCanvas(source) {
-    var newCanvas = document.createElement('canvas');
-    var context = newCanvas.getContext('2d');
-
-    newCanvas.width = source.width;
-    newCanvas.height = source.height;
-
-    context.drawImage(source, 0, 0);
-
-    return newCanvas;
+function loadToPrimary(source) {
+    primaryCtx.drawImage(source, 0, 0, source.width, source.height, 0, 0, scene.w, scene.h);
+    redrawPrimary();
 }
+
+function redrawPrimary() {
+    let dx = 0;
+    let dy = 0;
+    let dw = displayCanvas.width;
+    let dh = displayCanvas.height;
+
+    let sx = scene.viewport.x;
+    let sy = scene.viewport.y;
+    let sw = dw / scene.viewport.zoom;
+    let sh = dh / scene.viewport.zoom;
+
+    displayCtx.clearRect(0, 0, dw, dh);
+    displayCtx.drawImage(...getSafeRect(primaryCanvas, sx, sy, sw, sh, dx, dy, dw, dh))
+}
+
+// ---
 
 function viewportToScene(x, y) {
     let sceneX = scene.viewport.x + x / scene.viewport.zoom;
@@ -266,6 +337,47 @@ function zoomViewportAt(x, y, dz) {
     scene.viewport.zoom += dz;
 }
 
+// ---
+
+class Drawer {
+    constructor(color) {
+        this.points = [];
+        this.color = color || 'rgb(0, 0, 0)';
+        this.tool = new Croquis.Brush();
+        this.tool.setDrawFunction(drawMandalaPoint);
+        this.tool.setSize(10);
+    }
+
+    down(item) {
+        this.stabilizer = new Croquis.Stabilizer(
+            this.tool.down,
+            this.tool.move,
+            this.tool.up,
+            10,
+            0.5,
+            item.x,
+            item.y,
+            item.pressure
+        );
+    }
+
+    move(item) {
+        this.stabilizer.move(
+            item.x,
+            item.y,
+            item.pressure
+        );
+    }
+
+    up(item) {
+        this.stabilizer.up(
+            item.x,
+            item.y,
+            item.pressure
+        );
+    }
+}
+
 function drawMandalaPoint(x, y, size) {
     let [sceneX, sceneY] = viewportToScene(x, y);
 
@@ -305,98 +417,6 @@ function drawMandalaPointDirect(ctx, cx, cy, x, y, size) {
 }
 
 // ---
-
-async function onLoad() {
-    await initialize(await restoreState());
-}
-
-async function setCanvasSize() {
-    let newW = window.innerWidth;
-    let newH = window.innerHeight;
-
-    displayCanvas.width = newW;
-    displayCanvas.height = newH;
-
-    drawInput.style.width = `${newW}px`;
-    drawInput.style.height = `${newH}px`;
-
-    centerViewport();
-    redrawPrimary();
-}
-
-async function initialize(source) {
-    setCanvasSize();
-
-    primaryCanvas.width = scene.w;
-    primaryCanvas.height = scene.h;
-
-    clear();
-    centerViewport();
-
-    if (source) {
-        loadToPrimary(source);
-    }
-}
-
-function loadToPrimary(source) {
-    primaryCtx.drawImage(source, 0, 0, source.width, source.height, 0, 0, scene.w, scene.h);
-    redrawPrimary();
-}
-
-function redrawPrimary() {
-    let dx = 0;
-    let dy = 0;
-    let dw = displayCanvas.width;
-    let dh = displayCanvas.height;
-
-    let sx = scene.viewport.x;
-    let sy = scene.viewport.y;
-    let sw = dw / scene.viewport.zoom;
-    let sh = dh / scene.viewport.zoom;
-
-    displayCtx.clearRect(0, 0, dw, dh);
-    displayCtx.drawImage(...getSafeRect(primaryCanvas, sx, sy, sw, sh, dx, dy, dw, dh))
-}
-
-function pushSnapshot() {
-    let snapshot = cloneCanvas(primaryCanvas);
-    pushCircular(scene.snapshots, snapshot, MAX_SNAPSHOT_HISTORY);
-}
-
-async function popSnapshot() {
-    let snapshot = scene.snapshots.pop();
-    if (snapshot) {
-        loadToPrimary(snapshot);
-        saveState();
-    }
-}
-
-function saveState() {
-    let url = cloneCanvas(primaryCanvas).toDataURL();
-    window.localStorage.setItem(STORAGE_KEY_SCENE, url);
-}
-
-async function restoreState() {
-    let url = window.localStorage.getItem(STORAGE_KEY_SCENE);
-    if (!url) return null;
-    return await loadImageAsync(url);
-}
-
-function canvasToBlob() {
-    return new Promise(resolve => {
-        primaryCanvas.toBlob(blob => {
-            resolve(blob);
-        });
-    });
-}
-
-window.addEventListener('load', ev => {
-    onLoad();
-});
-
-window.addEventListener('resize', ev => {
-    setCanvasSize();
-});
 
 function getPointerPressure(ev) {
     switch (ev.pointerType) {
@@ -631,12 +651,6 @@ async function saveCanvasAsFile() {
     await writable.write(await canvasToBlob());
 
     await writable.close();
-}
-
-async function openCanvasAsURL() {
-    let blob = await canvasToBlob();
-    let url = window.URL.createObjectURL(blob);
-    window.open(url, '_blank');
 }
 
 // ---
