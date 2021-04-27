@@ -446,23 +446,27 @@ function handleDrawUp(ev) {
 }
 
 (() => {
+    const STATE_DRAWING = 'DRAWING';
     const GESTURE_TIMEOUT = 50;
     let pointerDownEvents = new Map();
-    let firstPointerTime = 0;
+    let state = '';
+
+    let drawTimeout = 0;
     let startZoom = 0;
     let startDistance = 0;
-    let drawTimeout = 0;
 
     drawInput.addEventListener('pointerdown', ev => {
         pointerDownEvents.set(ev.pointerId, ev);
 
         switch (pointerDownEvents.size) {
         case 1:
-            drawTimeout = setTimeout(() => handleDrawDown(ev), GESTURE_TIMEOUT);
-            firstPointerTime = performance.now();
+            drawTimeout = setTimeout(() => {
+                state = STATE_DRAWING;
+                handleDrawDown(ev);
+            }, GESTURE_TIMEOUT);
             break;
         case 2:
-            if (performance.now() - firstPointerTime > GESTURE_TIMEOUT) {
+            if (state === STATE_DRAWING) {
                 pointerDownEvents.delete(ev.pointerId, ev);
                 return;
             }
@@ -490,7 +494,6 @@ function handleDrawUp(ev) {
     }
 
     drawInput.addEventListener('pointermove', ev => {
-
         switch (pointerDownEvents.size) {
         case 1:
             handleDrawMove(ev);
@@ -518,50 +521,56 @@ function handleDrawUp(ev) {
         }
     });
 
-    drawInput.addEventListener('pointerup', ev => {
+    function handlePointerUp(ev) {
         handleDrawUp(ev);
         pointerDownEvents.delete(ev.pointerId);
+        switch (pointerDownEvents.size) {
+        case 0:
+            state = '';
+            break;
+        }
+    }
+
+    drawInput.addEventListener('pointerup', ev => {
+        handlePointerUp(ev);
     });
 
     drawInput.addEventListener('pointerout', ev => {
-        handleDrawUp(ev);
-        pointerDownEvents.delete(ev.pointerId);
+        handlePointerUp(ev);
     });
 
     drawInput.addEventListener('pointercancel', ev => {
-        handleDrawUp(ev);
-        pointerDownEvents.delete(ev.pointerId);
+        handlePointerUp(ev);
     });
-})();
 
-drawInput.addEventListener('wheel', ev => {
-    ev.preventDefault();
+    drawInput.addEventListener('wheel', ev => {
+        ev.preventDefault();
 
-    if (ev.ctrlKey) {
-        //scene.viewport.zoom += ev.deltaY * 0.01;
-        zoomViewportAt(ev.clientX, ev.clientY, -ev.deltaY * 0.01);
-    } else {
-        panViewportBy(ev.deltaX * 2, ev.deltaY * 2);
-    }
+        if (state !== STATE_DRAWING) {
+            if (ev.ctrlKey) {
+                //scene.viewport.zoom += ev.deltaY * 0.01;
+                zoomViewportAt(ev.clientX, ev.clientY, -ev.deltaY * 0.01);
+            } else {
+                panViewportBy(ev.deltaX * 2, ev.deltaY * 2);
+            }
 
-    redrawPrimary();
-});
-
-(() => {
-    let startScale;
+            redrawPrimary();
+        }
+    });
 
     window.addEventListener("gesturestart", function (e) {
         e.preventDefault();
-        startScale = scene.viewport.zoom;
+        startZoom = scene.viewport.zoom;
     });
 
     window.addEventListener("gesturechange", function (e) {
         e.preventDefault();
 
-        let newZoom = startScale * e.scale;
-        zoomViewportAt(e.clientX, e.clientY, newZoom - scene.viewport.zoom);
-
-        redrawPrimary();
+        if (state !== STATE_DRAWING) {
+            let newZoom = startZoom * e.scale;
+            zoomViewportAt(e.clientX, e.clientY, newZoom - scene.viewport.zoom);
+            redrawPrimary();
+        }
     })
 
     window.addEventListener("gestureend", function (e) {
