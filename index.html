@@ -92,13 +92,99 @@ html, body {
 <script>
 'use strict';
 
+class MyFileStorage {
+    constructor(dbName, storeName) {
+        this.dbName = dbName;
+        this.storeName = storeName;
+        this.db = null;
+    }
+
+    initialize() {
+        return new Promise((resolve, reject) => {
+            let openReq = window.indexedDB.open(this.dbName, 1);
+
+            openReq.onupgradeneeded = ev => {
+                let db = openReq.result;
+                db.createObjectStore(this.storeName, {keyPath: 'name'});
+            };
+
+            openReq.onsuccess = ev => {
+                this.db = openReq.result;
+                resolve();
+            };
+        });
+    }
+
+    async listFiles() {
+        return await this.queryFiles();
+    }
+
+    async readFile(name) {
+        let files = await this.queryFiles(name);
+        switch (files.length) {
+        case 0:
+            return null;
+        case 1:
+            return files[0];
+        default:
+            throw new Error('key has more than one entry');
+        }
+    }
+
+    writeFile(file) {
+        return new Promise((resolve, reject) => {
+            let tx = this.db.transaction(this.storeName, 'readwrite', {durability: 'strict'});
+            let store = tx.objectStore(this.storeName);
+
+            tx.oncomplete = ev => {
+                resolve();
+            };
+
+            tx.onerror = ev => {
+                reject(ev.target.error);
+            };
+
+            store.put({
+                name: file.name,
+                file: file,
+            });
+        });
+    }
+
+    queryFiles(query = undefined) {
+        return new Promise((resolve, reject) => {
+            let tx = this.db.transaction(this.storeName, 'readonly', {durability: 'strict'});
+            let store = tx.objectStore(this.storeName);
+            let cursorReq = store.openCursor(query);
+
+            let files = [];
+
+            cursorReq.onsuccess = ev => {
+                let cursor = cursorReq.result;
+                if (!cursor) {
+                    resolve(files);
+                } else {
+                    let entry = cursor.value;
+                    files.push(entry.file);
+                    cursor.continue();
+                }
+            };
+        });
+    }
+}
+</script>
+
+<script>
+'use strict';
+
 const TAU = 2 * Math.PI;
 
-const STORAGE_KEY_SCENE = 'scene';
 const MAX_SNAPSHOT_HISTORY = 5;
 const MAX_COLOR_HISTORY = 25;
 const MAX_ZOOM = 2;
 const MIN_ZOOM = 0.3;
+
+const appFileStorage = new MyFileStorage('mandala', 'files');
 
 const drawInput = document.getElementById('drawInput');
 const menuInput = document.getElementById('menu');
@@ -138,6 +224,8 @@ let scene = {
 // ---
 
 async function onLoad() {
+    await appFileStorage.initialize();
+    await tryMigrateLegacyState();
     await initialize(await restoreState());
 }
 
@@ -165,6 +253,8 @@ window.addEventListener('resize', ev => {
 
 // ---
 
+const STORAGE_FILE_WORKING = 'WORKING';
+
 function pushSnapshot() {
     let snapshot = cloneCanvas(primaryCanvas);
     pushCircular(scene.snapshots, snapshot, MAX_SNAPSHOT_HISTORY);
@@ -174,19 +264,53 @@ async function popSnapshot() {
     let snapshot = scene.snapshots.pop();
     if (snapshot) {
         loadToPrimary(snapshot);
-        saveState();
+        await saveState();
     }
 }
 
-function saveState() {
+async function saveState() {
+    await setWorkingState(await primaryCanvasToBlob());
+}
+
+async function restoreState() {
+    let file = await appFileStorage.readFile(STORAGE_FILE_WORKING);
+    if (file === null) {
+        return null;
+    }
+    return await loadImageAsync(URL.createObjectURL(file));
+}
+
+async function setWorkingState(blob) {
+    let file = new File([blob], STORAGE_FILE_WORKING);
+    await appFileStorage.writeFile(file);
+}
+
+// ---
+
+const STORAGE_KEY_SCENE = 'scene';
+
+async function legacySaveState() {
     let url = cloneCanvas(primaryCanvas).toDataURL();
     window.localStorage.setItem(STORAGE_KEY_SCENE, url);
 }
 
-async function restoreState() {
+async function legacyLoadState() {
     let url = window.localStorage.getItem(STORAGE_KEY_SCENE);
     if (!url) return null;
     return await loadImageAsync(url);
+}
+
+async function legacyClearState() {
+    window.localStorage.removeItem(STORAGE_KEY_SCENE);
+}
+
+async function tryMigrateLegacyState() {
+    let img = await legacyLoadState();
+    if (img) {
+        let blob = await canvasToBlob(cloneCanvas(img));
+        await setWorkingState(blob);
+        await legacyClearState();
+    }
 }
 
 // ---
@@ -220,14 +344,18 @@ function cloneCanvas(source) {
 }
 
 async function openCanvasAsURL() {
-    let blob = await canvasToBlob();
+    let blob = await primaryCanvasToBlob();
     let url = window.URL.createObjectURL(blob);
     window.open(url, '_blank');
 }
 
-function canvasToBlob() {
+async function primaryCanvasToBlob() {
+    return await canvasToBlob(primaryCanvas);
+}
+
+function canvasToBlob(canvas) {
     return new Promise(resolve => {
-        primaryCanvas.toBlob(blob => {
+        canvas.toBlob(blob => {
             resolve(blob);
         });
     });
@@ -627,7 +755,7 @@ async function openFileToCanvas() {
 
     pushSnapshot();
     await initialize(img);
-    saveState();
+    await saveState();
 }
 
 function canSaveFile() {
@@ -648,7 +776,7 @@ async function saveCanvasAsFile() {
 
     let writable = await fileHandle.createWritable();
 
-    await writable.write(await canvasToBlob());
+    await writable.write(await primaryCanvasToBlob());
 
     await writable.close();
 }
@@ -680,9 +808,9 @@ const menuActions = {
         }
     },
 
-    clear() {
+    async clear() {
         clear();
-        saveState();
+        await saveState();
     },
 
     fill() {
@@ -712,7 +840,7 @@ const menuActions = {
     },
 
     async share() {
-        let blob = await canvasToBlob();
+        let blob = await primaryCanvasToBlob();
         let file = new File([blob], "mandala.png", {type: 'image/png'});
         let files = [file];
         let shareData = {
@@ -759,7 +887,7 @@ filePicker.addEventListener('change', async function (ev) {
 
     pushSnapshot();
     await initialize(img);
-    saveState();
+    await saveState();
 });
 
 function readFileAsDataURLAsync(file) {
