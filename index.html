@@ -33,6 +33,13 @@ html, body {
     z-index: 10;
     width: 5em;
 }
+#loading-status {
+    display: none;
+    position: absolute;
+    z-index: 10;
+    top: 30px;
+    left: 10px;
+}
 #filePicker, #backgroundPicker {
     visibility: hidden;
 }
@@ -53,6 +60,30 @@ html, body {
     #pallet .memory {
         height: 20px;
     }
+</style>
+
+<style>
+.lds-dual-ring {
+  display: inline-block;
+}
+.lds-dual-ring:after {
+  content: " ";
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 3px solid rgb(0, 106, 255);
+  border-color: rgb(0, 106, 255) transparent rgb(0, 106, 255) transparent;
+  animation: lds-dual-ring 1.2s linear infinite;
+}
+@keyframes lds-dual-ring {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
 </style>
 
 <!-- Global site tag (gtag.js) - Google Analytics -->
@@ -88,6 +119,10 @@ html, body {
     <canvas id="scene"></canvas>
     <input type="color" id="backgroundPicker" value="#FFFFFF" />
     <input type="file" id="filePicker" />
+
+    <div id="loading-status">
+        <div class="lds-dual-ring"></div>
+    </div>
 
 <script>
 'use strict';
@@ -144,7 +179,7 @@ class MyFileStorage {
                 reject(ev.target.error);
             };
 
-            store.put({
+            let putReq = store.put({
                 name: file.name,
                 file: file,
             });
@@ -171,6 +206,23 @@ class MyFileStorage {
             };
         });
     }
+
+    deleteFile(name) {
+        return new Promise((resolve, reject) => {
+            let tx = this.db.transaction(this.storeName, 'readwrite', {durability: 'strict'});
+            let store = tx.objectStore(this.storeName);
+
+            tx.oncomplete = ev => {
+                resolve();
+            };
+
+            tx.onerror = ev => {
+                reject(ev.target.error);
+            };
+
+            store.delete(name);
+        });
+    }
 }
 </script>
 
@@ -192,6 +244,7 @@ const colorPicker = document.getElementById('colorPicker');
 const backgroundPicker = document.getElementById('backgroundPicker');
 const filePicker = document.getElementById('filePicker');
 const pallet = document.getElementById('pallet');
+const loadingStatus = document.getElementById('loading-status');
 
 const primaryCanvas = document.createElement('canvas');
 const primaryCtx = primaryCanvas.getContext('2d');
@@ -226,7 +279,17 @@ let scene = {
 async function onLoad() {
     await appFileStorage.initialize();
     await tryMigrateLegacyState();
-    await initialize(await restoreState());
+
+    let state;
+    try {
+        state = await restoreState();
+    } catch (ex) {
+        alert('Drawing state is corrupted. Resetting.');
+        await clearState();
+        state = null;
+    }
+
+    await initialize(state);
 }
 
 async function initialize(source) {
@@ -235,12 +298,21 @@ async function initialize(source) {
     primaryCanvas.width = scene.w;
     primaryCanvas.height = scene.h;
 
-    clear();
-    centerViewport();
-
     if (source) {
         loadToPrimary(source);
+    } else {
+        clear();
     }
+
+    centerViewport();
+    redrawPrimary();
+}
+
+async function onResize() {
+    window.scrollTo(0, 0);
+    resetDisplaySize();
+    centerViewport();
+    redrawPrimary();
 }
 
 window.addEventListener('load', ev => {
@@ -248,7 +320,7 @@ window.addEventListener('load', ev => {
 });
 
 window.addEventListener('resize', ev => {
-    resetDisplaySize();
+    onResize();
 });
 
 // ---
@@ -264,12 +336,15 @@ async function popSnapshot() {
     let snapshot = scene.snapshots.pop();
     if (snapshot) {
         loadToPrimary(snapshot);
+        redrawPrimary();
         await saveState();
     }
 }
 
 async function saveState() {
+    loadingStatus.style.display = 'block';
     await setWorkingState(await primaryCanvasToBlob());
+    loadingStatus.style.display = 'none';
 }
 
 async function restoreState() {
@@ -278,6 +353,10 @@ async function restoreState() {
         return null;
     }
     return await loadImageAsync(URL.createObjectURL(file));
+}
+
+async function clearState() {
+    await appFileStorage.deleteFile(STORAGE_FILE_WORKING);
 }
 
 async function setWorkingState(blob) {
@@ -324,9 +403,6 @@ async function resetDisplaySize() {
 
     drawInput.style.width = `${newW}px`;
     drawInput.style.height = `${newH}px`;
-
-    centerViewport();
-    redrawPrimary();
 }
 
 // ---
@@ -379,7 +455,6 @@ function fillCanvas(ctx, color) {
 
 function loadToPrimary(source) {
     primaryCtx.drawImage(source, 0, 0, source.width, source.height, 0, 0, scene.w, scene.h);
-    redrawPrimary();
 }
 
 function redrawPrimary() {
@@ -902,6 +977,7 @@ function loadImageAsync(url) {
     return new Promise((resolve, reject) => {
         let img = new window.Image();
         img.onload = () => resolve(img);
+        img.onerror = ev => reject(new Error('Could not load image from URL: ' + url));
         img.src = url;
     });
 }
