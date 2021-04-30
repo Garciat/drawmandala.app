@@ -2,7 +2,8 @@
 <html lang="en-us">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Draw a Mandala Online</title>
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/assets/logo/logo-192.png">
@@ -407,6 +408,9 @@ async function resetDisplaySize() {
 
     drawInput.style.width = `${newW}px`;
     drawInput.style.height = `${newH}px`;
+
+    document.body.style.width = `${newW}px`;
+    document.body.style.height = `${newH}px`;
 }
 
 // ---
