@@ -15,18 +15,21 @@ html, body {
     height: 100%;
     margin: 0px;
     background: #AAA;
+
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
 }
 #scene {
     position: absolute;
     z-index: 1;
-    touch-action: none;
 }
 #drawInput {
     position: absolute;
     top: 0;
     left: 0;
     z-index: 5;
-    touch-action: none;
 }
 #menu {
     position: absolute;
@@ -679,6 +682,9 @@ function handleDrawUp(ev) {
     let startDistance = 0;
 
     drawInput.addEventListener('pointerdown', ev => {
+        ev.preventDefault();
+        ev.stopPropagation();
+
         pointerDownEvents.set(ev.pointerId, ev);
 
         switch (pointerDownEvents.size) {
@@ -717,6 +723,9 @@ function handleDrawUp(ev) {
     }
 
     drawInput.addEventListener('pointermove', ev => {
+        ev.preventDefault();
+        ev.stopPropagation();
+
         switch (pointerDownEvents.size) {
         case 1:
             handleDrawMove(ev);
@@ -745,6 +754,9 @@ function handleDrawUp(ev) {
     });
 
     function handlePointerUp(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+
         handleDrawUp(ev);
         pointerDownEvents.delete(ev.pointerId);
         switch (pointerDownEvents.size) {
@@ -799,6 +811,10 @@ function handleDrawUp(ev) {
     window.addEventListener("gestureend", function (e) {
         e.preventDefault();
     });
+
+    drawInput.oncontextmenu = ev => {
+        ev.preventDefault();
+    };
 })();
 
 // ---
