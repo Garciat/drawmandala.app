@@ -941,8 +941,6 @@ const menuActions = {
         let file = new File([blob], "mandala.png", {type: 'image/png'});
         let files = [file];
         let shareData = {
-            title: 'Mandala',
-            text: 'Check out this mandala I drew using drawmandala.app',
             files: files,
         };
         if (navigator.share) {
