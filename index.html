@@ -314,6 +314,7 @@ async function initialize(source) {
 }
 
 async function onResize() {
+    await sleep(100); // HACK: let screen reflow for a bit
     window.scrollTo(0, 0);
     resetDisplaySize();
     centerViewport();
